@@ -1,0 +1,46 @@
+site_name: IBEF Backend API
+site_url: https://le-riz.github.io/IBEF-Backend/
+repo_url: https://github.com/Le-Riz/IBEF-Backend
+repo_name: IBEF Backend
+
+nav:
+  - Home: index.md
+  - API: api.md
+  - Dev guide: dev.md
+
+theme:
+  name: material
+  font:
+    text: Red Hat Display
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+
+extra_css:
+  - assets/css/custom.css
+  - https://unpkg.com/katex@0/dist/katex.min.css
+
+extra:
+  generator: false
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/katex.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
