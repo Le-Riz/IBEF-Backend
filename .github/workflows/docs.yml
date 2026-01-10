@@ -1,23 +1,38 @@
 name: Build and Deploy Docs
+
 on:
   push:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: write      # required for artifact upload
+  pages: write         # required for deployment
+  id-token: write      # required for OIDC auth
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      - run: pip install mkdocs mkdocs-material mkdocstrings[python]
-      - run: mkdocs build
-      - uses: peaceiris/actions-gh-pages@v3
+      - run: pip install mkdocs mkdocs-material "mkdocstrings[python]>=0.18"
+      - run: mkdocs build --site-dir site
+      - uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          enable_jekyll: false
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
