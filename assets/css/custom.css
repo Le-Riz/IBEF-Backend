@@ -1,0 +1,4 @@
+/* Minimal custom styles for docs */
+.md-typeset h1 {
+  font-weight: 700;
+}
