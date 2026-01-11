@@ -34,7 +34,7 @@ packages = ["src"]
 dependencies = ["ibef-backend[dev]"]
 
 [tool.hatch.envs.default.scripts]
-api = "uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+api = "cd src && uvicorn main:app --reload --host 0.0.0.0 --port 8000"
 test = "pytest"
 lint = "ruff check src tests"
 typecheck = "mypy src"
@@ -60,3 +60,5 @@ target-version = "py310"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 filterwarnings = ["ignore::DeprecationWarning"]
+pythonpath = ["src"]
+norecursedirs = ["src", "storage", "docs", ".git", ".hatch"]

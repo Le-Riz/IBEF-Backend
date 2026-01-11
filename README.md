@@ -15,8 +15,10 @@ hatch run api
 Alternatively, on Unix systems:
 
 ```bash
-./run.sh        # runs the API dev server
-./run.sh test   # runs the test suite
+./run.sh          # runs the API dev server (default)
+./run.sh api      # runs the API dev server
+./run.sh test     # runs the test suite
+./run.sh doc      # starts the documentation server
 ```
 
 ## Development
@@ -25,6 +27,7 @@ Alternatively, on Unix systems:
 # start dev server
 hatch run api
 # or: ./run.sh
+# or: ./run.sh api
 
 # run tests
 hatch run test
@@ -35,6 +38,10 @@ hatch run lint
 
 # type-check
 hatch run typecheck
+
+# serve documentation
+hatch run docs:serve
+# or: ./run.sh doc
 ```
 
 ## Documentation
@@ -62,18 +69,38 @@ hatch run docs:build
   - Returns: `{"status": "ok", "app": "IBEF Backend API"}`
   
 - `GET /api`
-  - `/data`
-    - `GET /point/{sensor_id}` → `{"time": float, "value": float}`
-    - `GET /list/{sensor_id}` → `{"list": [{"time": float, "value": float}, ...]}`
-  - `/raw`
-    - `GET /point/{sensor_id}` → `{"time": float, "value": float}`
-  - `/test`
-    - `PUT /start` (with optional field list) → `{}`
-    - `PUT /stop` → `{}`
-  - `/history`
-    - `GET /list` → `{"list": ["name1", "name2", ...]}`
-    - `DELETE /{name}` → `{}`
-    - `PUT /{name}` → `{}`
-    - `POST /{name}` (with field list) → `{}`
-    - `GET /{name}?download=false` → `{"fields": [...]}`
-    - `GET /{name}?download=true` → `{zip file}`
+  - `/sensor/{sensor_id}` — Sensor data operations (FORCE, DISP_1, DISP_2, DISP_3)
+    - `GET /data` → Latest calibrated data point: `{"time": float, "value": float}`
+    - `GET /data/history?window={30,60,120,300,600}` → Fixed-count history with uniform spacing
+      - Returns exactly 300 points regardless of window duration
+      - Uses 10 Hz processing rate for point spacing
+    - `GET /raw` → Latest raw/uncalibrated data point
+    - `PUT /zero` → Calibrate sensor (zero reference)
+  - `/test` — Test session management
+    - `PUT /start` → Start test with metadata payload
+    - `PUT /stop` → Stop current test session
+  - `/history` — Test history persistence and retrieval
+    - `GET /` → List all test IDs
+    - `GET /{name}` → Get test metadata
+    - `GET /{name}/download` → Download test data as ZIP
+    - `PUT /{name}` → Update test metadata
+    - `PUT /{name}/archive` → Move test to archive
+    - `DELETE /{name}` → Permanently delete test
+
+## Performance optimizations
+
+### Circular Buffer (O(1) operations)
+- **`__slots__`**: Fixed attribute list reduces memory overhead
+- **Power-of-2 capacity**: Uses bitwise AND instead of modulo for 3-5x faster indexing
+- **Precomputed windows**: All window offsets calculated at initialization (O(1) retrieval)
+- **10 Hz processing rate**: Point spacing reflects actual data delivery rate, not raw sensor frequency
+
+### Data Storage
+- **Fixed point count**: 300 points per duration window (30s, 60s, 120s, 300s, 600s) ensures consistent memory usage
+- **O(1) bulk retrieval**: Optimized `get_all()` detects buffer wrap state for fastest access
+- **No dynamic computation**: All window info precomputed; query time is deterministic
+
+### Test History
+- **Persistent storage**: Metadata in JSON, raw data in CSV with circular buffer backup
+- **Archive support**: Move old tests to archived_data folder without deleting
+- **Concurrent test support**: Each test has independent sensor buffers

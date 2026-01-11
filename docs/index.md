@@ -1,15 +1,50 @@
 # IBEF Backend API
 
-IBEF Backend is a FastAPI service that exposes the core features of the project.
+IBEF Backend is a FastAPI service for real-time sensor data acquisition, processing, and persistent test management.
 
-- Built with FastAPI
-- Managed with Hatch for reproducible environments
-- Documented with MkDocs + Material theme
+## Features
 
-## Running the API
+- **Real-time data acquisition** — 10 Hz processing rate with 4 sensors (FORCE, DISP_1, DISP_2, DISP_3)
+- **Optimized storage** — Circular buffers with O(1) insertion and retrieval
+- **Fixed-point history** — Exactly 300 points per window (30s, 60s, 2m, 5m, 10m) with uniform spacing
+- **Test management** — Start, stop, archive, and delete test sessions
+- **Persistent storage** — Metadata in JSON, data in CSV with backup log files
+- **REST API** — Full CRUD operations on sensors and test histories
+
+## Quick start
 
 ```bash
-hatch run api
+# Start the API server
+./run.sh
+# or: hatch run api
+
+# Run tests
+./run.sh test
+
+# View documentation
+./run.sh doc
 ```
 
-Then open http://localhost:8000/docs for the interactive API docs.
+Then open http://localhost:8000/docs for the interactive API documentation (or http://localhost:8000 for MkDocs when using `./run.sh doc`).
+
+## Key Components
+
+- **Circular Buffers** — O(1) insertion with 0.1s to 2.0s point spacing depending on window
+- **Data Processor** — 10 Hz rate, applies calibration, publishes events
+- **Test Manager** — Handles test lifecycle and disk persistence
+- **REST API** — Sensor data, history queries, and test management endpoints
+
+## API Endpoints
+
+- `GET /api/sensor/{sensor_id}/data` — Latest calibrated data
+- `GET /api/sensor/{sensor_id}/data/history?window=30` — 300 points with uniform spacing
+- `PUT /api/test/start` — Start a new test session
+- `PUT /api/test/stop` — Stop current test
+- `GET /api/history` — List all test histories
+- `GET /api/history/{name}/download` — Download test data as ZIP
+- `PUT /api/history/{name}/archive` — Archive a test
+
+## Documentation
+
+- **[API Reference](api.md)** — Complete endpoint documentation with examples
+- **[Developer Guide](dev.md)** — Architecture, performance, and contribution guidelines

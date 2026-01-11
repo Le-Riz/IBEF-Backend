@@ -1,40 +1,104 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from typing import Any
 import io
-from schemas import HistoryList, EmptyResponse, FieldsResponse
+import zipfile
+import os
+from schemas import HistoryList
+from core.models.test_data import TestMetaData
+from core.services.test_manager import test_manager
 
 router = APIRouter(prefix="/history", tags=["history"])
 
 
-@router.get("/list", response_model=HistoryList)
+@router.get("", response_model=HistoryList)
 async def list_histories() -> HistoryList:
-    # placeholder: return available history names
-    return HistoryList(list=["X"])
+    """
+    List all available test histories (sorted by date, newest first).
+    """
+    histories = test_manager.get_history()
+    test_ids = [h.test_id for h in histories]
+    return HistoryList(list=test_ids)
 
 
-@router.delete("/{name}", response_model=EmptyResponse)
-async def delete_history(name: str) -> EmptyResponse:
-    return EmptyResponse()
+@router.get("/{name}", response_model=TestMetaData)
+async def get_history_metadata(name: str) -> TestMetaData:
+    """
+    Get metadata for a specific test history.
+    """
+    histories = test_manager.get_history()
+    for h in histories:
+        if h.test_id == name:
+            return h
+    raise HTTPException(status_code=404, detail=f"Test history '{name}' not found")
 
 
-@router.put("/{name}", response_model=EmptyResponse)
-async def put_history(name: str) -> EmptyResponse:
-    return EmptyResponse()
+@router.get("/{name}/download")
+async def download_history(name: str):
+    """
+    Download a test history as a ZIP file containing metadata, raw log, and CSV.
+    """
+    from core.services.test_manager import TEST_DATA_DIR, ARCHIVE_DIR
+    
+    # Check if test exists in current or archived
+    test_dir = os.path.join(TEST_DATA_DIR, name)
+    if not os.path.exists(test_dir):
+        test_dir = os.path.join(ARCHIVE_DIR, name)
+        if not os.path.exists(test_dir):
+            raise HTTPException(status_code=404, detail=f"Test history '{name}' not found")
+    
+    # Create ZIP in memory
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(test_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, os.path.dirname(test_dir))
+                zf.write(file_path, arcname)
+    
+    buf.seek(0)
+    return StreamingResponse(
+        buf, 
+        media_type="application/zip", 
+        headers={"Content-Disposition": f"attachment; filename=\"{name}.zip\""}
+    )
 
 
-@router.post("/{name}", response_model=EmptyResponse)
-async def post_history(name: str, payload: list[dict] | None = None) -> EmptyResponse:
-    return EmptyResponse()
+@router.delete("/{name}", status_code=204)
+async def delete_history(name: str) -> None:
+    """
+    Permanently delete a test history.
+    """
+    success = test_manager.delete_test(name)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Test history '{name}' not found")
 
 
-@router.get("/{name}", response_model=FieldsResponse)
-async def get_history(name: str, download: bool = Query(False)):
-    if download:
-        # return a fake zip stream for now
-        buf = io.BytesIO()
-        buf.write(b"PK\x03\x04")
-        buf.seek(0)
-        return StreamingResponse(buf, media_type="application/zip", headers={"Content-Disposition": f"attachment; filename=\"{name}.zip\""})
-    # otherwise return fields
-    return FieldsResponse(fields=[])
+@router.put("/{name}/archive", status_code=204)
+async def archive_history(name: str) -> None:
+    """
+    Archive a test history (move to archived storage).
+    """
+    success = test_manager.archive_test(name)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Test history '{name}' not found")
+
+
+@router.put("/{name}", status_code=204)
+async def update_history_metadata(name: str, metadata: TestMetaData) -> None:
+    """
+    Update metadata for a test history.
+    """
+    from core.services.test_manager import TEST_DATA_DIR
+    from dataclasses import asdict
+    import json
+    
+    test_dir = os.path.join(TEST_DATA_DIR, name)
+    if not os.path.exists(test_dir):
+        raise HTTPException(status_code=404, detail=f"Test history '{name}' not found")
+    
+    metadata_file = os.path.join(test_dir, "metadata.json")
+    try:
+        with open(metadata_file, 'w') as f:
+            json.dump(asdict(metadata), f, indent=2)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update metadata: {str(e)}")

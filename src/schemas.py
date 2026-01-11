@@ -1,5 +1,6 @@
-from typing import List, Any
+from typing import List, Any, Union
 from pydantic import BaseModel
+from core.models.test_data import TestMetaData
 
 
 class HealthOK(BaseModel):
@@ -29,4 +30,8 @@ class EmptyResponse(BaseModel):
 
 
 class FieldsResponse(BaseModel):
-    fields: List[Any]
+    fields: Union[List[Any], TestMetaData]
+
+
+class MessageResponse(BaseModel):
+    message: str
