@@ -38,11 +38,18 @@ hatch run docs:build
 hatch run docs:serve
 # or: ./run.sh doc
 
-# build static site
-hatch run docs:build
+# export OpenAPI schema
+hatch run export-openapi
+# or: ./run.sh export-openapi
+
+# build static site with OpenAPI schema
+hatch run docs:export-schema
+# or: ./run.sh build-docs
 ```
 
 MkDocs sources live under `docs/`. Adjust navigation in `mkdocs.yml` when adding new pages.
+
+The OpenAPI schema is automatically generated from the FastAPI app and embedded in the static documentation, making it available on GitHub Pages without requiring a running API.
 
 ---
 

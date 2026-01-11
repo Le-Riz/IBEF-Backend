@@ -15,6 +15,7 @@ dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
   "pydantic-settings>=2.5.2",
+  "pyserial>=3.5",
 ]
 optional-dependencies = { dev = [
   "httpx>=0.27.2",
@@ -38,6 +39,7 @@ api = "cd src && uvicorn main:app --reload --host 0.0.0.0 --port 8000"
 test = "pytest"
 lint = "ruff check src tests"
 typecheck = "mypy src"
+export-openapi = "python scripts/export_openapi.py"
 
 [tool.hatch.envs.dev]
 dependencies = ["ibef-backend[dev]"]
@@ -52,6 +54,7 @@ dependencies = [
 [tool.hatch.envs.docs.scripts]
 serve = "mkdocs serve"
 build = "mkdocs build"
+export-schema = "python scripts/export_openapi.py && mkdocs build"
 
 [tool.ruff]
 line-length = 100

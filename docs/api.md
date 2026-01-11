@@ -2,6 +2,9 @@
 
 The IBEF Backend exposes a comprehensive REST API for data acquisition, sensor management, test execution, and history tracking.
 
+!!! tip "Interactive Documentation"
+    For a complete, interactive API reference with all endpoints, schemas, and the ability to try requests, see the **[API Reference](api-reference.md)** page (powered by ReDoc/OpenAPI).
+
 All endpoints follow RESTful principles with clear resource identification and consistent response codes:
 - **200 OK**: Successful GET request with response body
 - **204 No Content**: Successful PUT/POST/DELETE request without response body

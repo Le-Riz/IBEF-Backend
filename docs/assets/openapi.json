@@ -1,0 +1,687 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "IBEF Backend API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Read Root",
+        "operationId": "read_root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Read Root  Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Healthcheck",
+        "operationId": "healthcheck_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppHealthOK"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "List Histories",
+        "description": "List all available test histories (sorted by date, newest first).",
+        "operationId": "list_histories_api_history_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history/{name}": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Get History Metadata",
+        "description": "Get metadata for a specific test history.",
+        "operationId": "get_history_metadata_api_history__name__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestMetaData"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Delete History",
+        "description": "Permanently delete a test history.",
+        "operationId": "delete_history_api_history__name__delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Update History Metadata",
+        "description": "Update metadata for a test history.",
+        "operationId": "update_history_metadata_api_history__name__put",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestMetaData"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history/{name}/download": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Download History",
+        "description": "Download a test history as a ZIP file containing metadata, raw log, and CSV.",
+        "operationId": "download_history_api_history__name__download_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history/{name}/archive": {
+      "put": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Archive History",
+        "description": "Archive a test history (move to archived storage).",
+        "operationId": "archive_history_api_history__name__archive_put",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/test/start": {
+      "put": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Start Test",
+        "operationId": "start_test_api_test_start_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/TestMetaData"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/test/stop": {
+      "put": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Stop Test",
+        "operationId": "stop_test_api_test_stop_put",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/api/sensor/{sensor_id}/data": {
+      "get": {
+        "tags": [
+          "sensor"
+        ],
+        "summary": "Get Sensor Data",
+        "description": "Get the latest data point from a sensor (calibrated/processed value).",
+        "operationId": "get_sensor_data_api_sensor__sensor_id__data_get",
+        "parameters": [
+          {
+            "name": "sensor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sensor Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Point"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sensor/{sensor_id}/data/history": {
+      "get": {
+        "tags": [
+          "sensor"
+        ],
+        "summary": "Get Sensor Data History",
+        "description": "Get historical data points from a sensor (calibrated/processed values).\nWindow is expressed in seconds and must be one of: 30, 60, 120, 300, 600.\nReturns a fixed number of points (based on 30s sampling) evenly spaced across the window.",
+        "operationId": "get_sensor_data_history_api_sensor__sensor_id__data_history_get",
+        "parameters": [
+          {
+            "name": "sensor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sensor Id"
+            }
+          },
+          {
+            "name": "window",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 30,
+              "title": "Window"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PointsList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sensor/{sensor_id}/raw": {
+      "get": {
+        "tags": [
+          "sensor"
+        ],
+        "summary": "Get Sensor Raw Data",
+        "description": "Get the latest raw (uncalibrated) data point from a sensor.",
+        "operationId": "get_sensor_raw_data_api_sensor__sensor_id__raw_get",
+        "parameters": [
+          {
+            "name": "sensor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sensor Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Point"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sensor/{sensor_id}/zero": {
+      "put": {
+        "tags": [
+          "sensor"
+        ],
+        "summary": "Zero Sensor",
+        "description": "Zero a sensor by recording its current value.\nFuture readings from this sensor will be adjusted by subtracting this value.",
+        "operationId": "zero_sensor_api_sensor__sensor_id__zero_put",
+        "parameters": [
+          {
+            "name": "sensor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sensor Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AppHealthOK": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "app": {
+            "type": "string",
+            "title": "App"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "app"
+        ],
+        "title": "AppHealthOK"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HistoryList": {
+        "properties": {
+          "list": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "List"
+          }
+        },
+        "type": "object",
+        "required": [
+          "list"
+        ],
+        "title": "HistoryList"
+      },
+      "Point": {
+        "properties": {
+          "time": {
+            "type": "number",
+            "title": "Time"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "value"
+        ],
+        "title": "Point"
+      },
+      "PointsList": {
+        "properties": {
+          "list": {
+            "items": {
+              "$ref": "#/components/schemas/Point"
+            },
+            "type": "array",
+            "title": "List"
+          }
+        },
+        "type": "object",
+        "required": [
+          "list"
+        ],
+        "title": "PointsList"
+      },
+      "TestMetaData": {
+        "properties": {
+          "test_id": {
+            "type": "string",
+            "title": "Test Id"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "operator_name": {
+            "type": "string",
+            "title": "Operator Name"
+          },
+          "specimen_code": {
+            "type": "string",
+            "title": "Specimen Code"
+          },
+          "dim_length": {
+            "type": "number",
+            "title": "Dim Length"
+          },
+          "dim_height": {
+            "type": "number",
+            "title": "Dim Height"
+          },
+          "dim_width": {
+            "type": "number",
+            "title": "Dim Width"
+          },
+          "loading_mode": {
+            "type": "string",
+            "title": "Loading Mode"
+          },
+          "sensor_spacing": {
+            "type": "number",
+            "title": "Sensor Spacing"
+          },
+          "ext_support_spacing": {
+            "type": "number",
+            "title": "Ext Support Spacing"
+          },
+          "load_point_spacing": {
+            "type": "number",
+            "title": "Load Point Spacing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "test_id",
+          "date",
+          "operator_name",
+          "specimen_code",
+          "dim_length",
+          "dim_height",
+          "dim_width",
+          "loading_mode",
+          "sensor_spacing",
+          "ext_support_spacing",
+          "load_point_spacing"
+        ],
+        "title": "TestMetaData",
+        "description": "Data class representing metadata for a test.\nCompatible with both dataclass operations and Pydantic validation."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

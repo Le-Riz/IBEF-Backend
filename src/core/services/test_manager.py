@@ -22,7 +22,7 @@ ARCHIVE_DIR = os.path.join(STORAGE_ROOT, "archived_data")
 # Sampling frequency per sensor type (Hz - points per second)
 # Used to calculate buffer capacity and reference array sizes
 # Default: 20 Hz (50ms between points)
-SENSOR_SAMPLING_FREQ = 20.0
+SENSOR_SAMPLING_FREQ = 100.0
 
 
 class TestManager:

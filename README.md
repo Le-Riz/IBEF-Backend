@@ -52,9 +52,19 @@ MkDocs is configured with Material and mkdocstrings.
 # live docs server
 hatch run docs:serve
 
-# build static docs
-hatch run docs:build
+# export OpenAPI schema
+hatch run export-openapi
+# or: ./run.sh export-openapi
+
+# build static docs (with OpenAPI schema)
+hatch run docs:export-schema
+# or: ./run.sh build-docs
 ```
+
+The documentation includes:
+- **Interactive API Reference** — Full OpenAPI/Swagger documentation embedded in MkDocs
+- **API Overview** — Quick reference with examples
+- **Developer Guide** — Architecture and performance details
 
 ## Project layout
 

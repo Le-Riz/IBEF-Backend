@@ -46,5 +46,6 @@ Then open http://localhost:8000/docs for the interactive API documentation (or h
 
 ## Documentation
 
-- **[API Reference](api.md)** — Complete endpoint documentation with examples
+- **[API Reference (Interactive)](api-reference.md)** — Full OpenAPI documentation with ReDoc
+- **[API Overview](api.md)** — Quick reference and examples
 - **[Developer Guide](dev.md)** — Architecture, performance, and contribution guidelines
