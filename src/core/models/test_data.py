@@ -10,10 +10,10 @@ class TestMetaData:
     date: str
     operator_name: str
     specimen_code: str
-    dim_length: float
-    dim_height: float
-    dim_width: float
-    loading_mode: str
-    sensor_spacing: float
-    ext_support_spacing: float
-    load_point_spacing: float
+    dim_length: float = 0.0
+    dim_height: float = 0.0
+    dim_width: float = 0.0
+    loading_mode: str = ""
+    sensor_spacing: float = 0.0
+    ext_support_spacing: float = 0.0
+    load_point_spacing: float = 0.0

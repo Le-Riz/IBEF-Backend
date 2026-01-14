@@ -30,7 +30,12 @@ def test_history_get_metadata() -> None:
         "ext_support_spacing": 20.0,
         "load_point_spacing": 15.0
     }
-    start_resp = client.put("/api/test/start", json=payload)
+    # Prepare test
+    prep_resp = client.post("/api/test/info", json=payload)
+    assert prep_resp.status_code == 204
+    
+    # Start test
+    start_resp = client.put("/api/test/start")
     assert start_resp.status_code == 204
     
     # Stop test
@@ -78,7 +83,8 @@ def test_history_download() -> None:
         "ext_support_spacing": 20.0,
         "load_point_spacing": 15.0
     }
-    client.put("/api/test/start", json=payload)
+    client.post("/api/test/info", json=payload)
+    client.put("/api/test/start")
     client.put("/api/test/stop")
     
     # Get test name from list
@@ -110,7 +116,8 @@ def test_history_delete_endpoint() -> None:
         "ext_support_spacing": 20.0,
         "load_point_spacing": 15.0
     }
-    client.put("/api/test/start", json=payload)
+    client.post("/api/test/info", json=payload)
+    client.put("/api/test/start")
     client.put("/api/test/stop")
     
     # Get test name from list
@@ -140,7 +147,8 @@ def test_history_archive_endpoint() -> None:
         "ext_support_spacing": 20.0,
         "load_point_spacing": 15.0
     }
-    client.put("/api/test/start", json=payload)
+    client.post("/api/test/info", json=payload)
+    client.put("/api/test/start")
     client.put("/api/test/stop")
     
     # Get test name from list
@@ -170,7 +178,8 @@ def test_history_update_metadata() -> None:
         "ext_support_spacing": 20.0,
         "load_point_spacing": 15.0
     }
-    client.put("/api/test/start", json=payload)
+    client.post("/api/test/info", json=payload)
+    client.put("/api/test/start")
     client.put("/api/test/stop")
     
     # Get test name from list

@@ -144,6 +144,15 @@ class SensorManager:
         offset = self.offsets[sensor_id.value]
         corrected_value = value - offset
 
+        # Publish raw value (before offset correction)
+        raw_data = SensorData(
+            timestamp=time.time(),
+            sensor_id=sensor_id,
+            value=value,  # Raw uncorrected value
+        )
+        event_hub.send_all_on_topic("sensor_raw_update", raw_data)
+
+        # Publish corrected value
         data = SensorData(
             timestamp=time.time(),
             sensor_id=sensor_id,

@@ -334,3 +334,4 @@ class SensorDataStorage:
             "is_full": buffer.is_full(),
             "utilization": buffer.count / buffer.capacity,
         }
+

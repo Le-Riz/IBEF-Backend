@@ -1,6 +1,7 @@
 from typing import List, Any, Union
 from pydantic import BaseModel
 from core.models.test_data import TestMetaData
+from core.models.test_state import TestState
 
 
 class HealthOK(BaseModel):
@@ -15,6 +16,10 @@ class AppHealthOK(BaseModel):
 class Point(BaseModel):
     time: float
     value: float
+
+
+class OffsetResponse(BaseModel):
+    offset: float
 
 
 class PointsList(BaseModel):
@@ -35,3 +40,7 @@ class FieldsResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class TestStatusResponse(BaseModel):
+    status: TestState

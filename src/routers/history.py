@@ -20,7 +20,16 @@ async def list_histories() -> HistoryList:
     return HistoryList(list=test_ids)
 
 
-@router.get("/{name}", response_model=TestMetaData)
+@router.get("/{name}", response_model=TestMetaData, responses={
+    404: {
+        "description": "Test history not found.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Test history 'test_123' not found"}
+            }
+        }
+    }
+})
 async def get_history_metadata(name: str) -> TestMetaData:
     """
     Get metadata for a specific test history.
@@ -32,7 +41,16 @@ async def get_history_metadata(name: str) -> TestMetaData:
     raise HTTPException(status_code=404, detail=f"Test history '{name}' not found")
 
 
-@router.get("/{name}/download")
+@router.get("/{name}/download", responses={
+    404: {
+        "description": "Test history not found.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Test history 'test_123' not found"}
+            }
+        }
+    }
+})
 async def download_history(name: str):
     """
     Download a test history as a ZIP file containing metadata, raw log, and CSV.
@@ -63,7 +81,16 @@ async def download_history(name: str):
     )
 
 
-@router.delete("/{name}", status_code=204)
+@router.delete("/{name}", status_code=204, responses={
+    404: {
+        "description": "Test history not found.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Test history 'test_123' not found"}
+            }
+        }
+    }
+})
 async def delete_history(name: str) -> None:
     """
     Permanently delete a test history.
@@ -73,7 +100,16 @@ async def delete_history(name: str) -> None:
         raise HTTPException(status_code=404, detail=f"Test history '{name}' not found")
 
 
-@router.put("/{name}/archive", status_code=204)
+@router.put("/{name}/archive", status_code=204, responses={
+    404: {
+        "description": "Test history not found.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Test history 'test_123' not found"}
+            }
+        }
+    }
+})
 async def archive_history(name: str) -> None:
     """
     Archive a test history (move to archived storage).
@@ -83,7 +119,24 @@ async def archive_history(name: str) -> None:
         raise HTTPException(status_code=404, detail=f"Test history '{name}' not found")
 
 
-@router.put("/{name}", status_code=204)
+@router.put("/{name}", status_code=204, responses={
+    404: {
+        "description": "Test history not found.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Test history 'test_123' not found"}
+            }
+        }
+    },
+    500: {
+        "description": "Failed to update metadata.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Failed to update metadata: Permission denied"}
+            }
+        }
+    }
+})
 async def update_history_metadata(name: str, metadata: TestMetaData) -> None:
     """
     Update metadata for a test history.
@@ -102,3 +155,59 @@ async def update_history_metadata(name: str, metadata: TestMetaData) -> None:
             json.dump(asdict(metadata), f, indent=2)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update metadata: {str(e)}")
+
+
+@router.get("/{name}/description", responses={
+    404: {
+        "description": "Test history or description not found.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Description not found for test test_123"}
+            }
+        }
+    }
+})
+async def get_description(name: str) -> dict:
+    """
+    Get the description.md content for a test history.
+    Returns the markdown content as plain text.
+    """
+    try:
+        content = test_manager.get_description(name)
+        return {"content": content}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Description not found for test {name}")
+
+
+@router.put("/{name}/description", status_code=204, responses={
+    404: {
+        "description": "Test history not found.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Test history 'test_123' not found"}
+            }
+        }
+    },
+    500: {
+        "description": "Failed to update description.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Failed to update description: Permission denied"}
+            }
+        }
+    }
+})
+async def update_description(name: str, payload: dict) -> None:
+    """
+    Update the description.md content for a test history.
+    
+    Request body:
+    ```json
+    {
+        "content": "# My Test Description\n\nThis is a markdown file."
+    }
+    ```
+    """
+    content = payload.get("content", "")
+    if not test_manager.set_description(name, content):
+        raise HTTPException(status_code=404, detail=f"Test history '{name}' not found")

@@ -103,6 +103,16 @@
               }
             }
           },
+          "404": {
+            "description": "Test history not found.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Test history 'test_123' not found"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -136,6 +146,16 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "404": {
+            "description": "Test history not found.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Test history 'test_123' not found"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -181,6 +201,26 @@
           "204": {
             "description": "Successful Response"
           },
+          "404": {
+            "description": "Test history not found.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Test history 'test_123' not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to update metadata.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Failed to update metadata: Permission denied"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -222,6 +262,16 @@
               }
             }
           },
+          "404": {
+            "description": "Test history not found.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Test history 'test_123' not found"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -258,6 +308,204 @@
           "204": {
             "description": "Successful Response"
           },
+          "404": {
+            "description": "Test history not found.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Test history 'test_123' not found"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history/{name}/description": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Get Description",
+        "description": "Get the description.md content for a test history.\nReturns the markdown content as plain text.",
+        "operationId": "get_description_api_history__name__description_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Description Api History  Name  Description Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Test history or description not found.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Description not found for test test_123"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Update Description",
+        "description": "Update the description.md content for a test history.\n    \n    Request body:\n    ```json\n    {\n        \"content\": \"# My Test Description\n\nThis is a markdown file.\"\n    }\n    ```",
+        "operationId": "update_description_api_history__name__description_put",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Test history not found.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Test history 'test_123' not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to update description.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Failed to update description: Permission denied"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/test/running": {
+      "get": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Get Test State",
+        "description": "Get the current state of the test system.\n\nReturns one of three possible states:\n- **NOTHING**: No test is running AND no test metadata has been prepared.\n  Ready to start fresh.\n- **PREPARED**: No test is currently running BUT test metadata has been set.\n  Ready to call PUT /start to begin the test.\n- **RUNNING**: A test is currently executing and recording data.\n  Data is being collected; call PUT /stop to end the test.",
+        "operationId": "get_test_state_api_test_running_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/test/info": {
+      "post": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Set Test Info",
+        "description": "Set test metadata to prepare for a test run.\n\nThis endpoint stores the test information without starting data collection.\nAfter calling this, the test will be in PREPARED state.\nThen call PUT /start to begin the actual test.",
+        "operationId": "set_test_info_api_test_info_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestMetaData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "A test is already running. Cannot prepare new metadata while a test is in progress.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "A test is already running."
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -277,27 +525,125 @@
           "test"
         ],
         "summary": "Start Test",
+        "description": "Start the prepared test and begin recording data.\n\nRequires that metadata has been set via POST /info first.\nChanges state from PREPARED to RUNNING.",
         "operationId": "start_test_api_test_start_put",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "No test metadata prepared. Call POST /info first.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test metadata prepared. Call POST /info first."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test is already running.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "A test is already running."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/test/stop": {
+      "put": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Stop Test",
+        "description": "Stop the currently running test and save all recorded data.\n\nChanges state from RUNNING to NOTHING.\nTest data is persisted to disk.",
+        "operationId": "stop_test_api_test_stop_put",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/api/test/description": {
+      "get": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Get Current Test Description",
+        "description": "Get the description of the current test (PREPARED or RUNNING state).\n\nAvailable after POST /info has been called.\nReturns the markdown content of description.md",
+        "operationId": "get_current_test_description_api_test_description_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Current Test Description Api Test Description Get"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No test prepared. Call POST /info first.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test prepared. Call POST /info first."
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Update Current Test Description",
+        "description": "Update the description of the current test (PREPARED or RUNNING state).\n    \n    Available after POST /info has been called.\n    Modifies the description.md file in real-time.\n    \n    Request body:\n    ```json\n    {\n        \"content\": \"# Updated Description\n\nNew markdown content...\"\n    }\n    ```",
+        "operationId": "update_current_test_description_api_test_description_put",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/TestMetaData"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
+                "additionalProperties": true,
+                "type": "object",
                 "title": "Payload"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "409": {
+            "description": "No test prepared. Call POST /info first.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test prepared. Call POST /info first."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to update description.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Failed to update description: Permission denied"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -312,27 +658,13 @@
         }
       }
     },
-    "/api/test/stop": {
-      "put": {
-        "tags": [
-          "test"
-        ],
-        "summary": "Stop Test",
-        "operationId": "stop_test_api_test_stop_put",
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          }
-        }
-      }
-    },
     "/api/sensor/{sensor_id}/data": {
       "get": {
         "tags": [
           "sensor"
         ],
         "summary": "Get Sensor Data",
-        "description": "Get the latest data point from a sensor (calibrated/processed value).",
+        "description": "Get the latest data point from a sensor (calibrated/processed value).\nTime is relative to test start if a test is running, otherwise 0.",
         "operationId": "get_sensor_data_api_sensor__sensor_id__data_get",
         "parameters": [
           {
@@ -352,6 +684,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Point"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid sensor_id provided.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"
                 }
               }
             }
@@ -409,6 +751,35 @@
               }
             }
           },
+          "400": {
+            "description": "Invalid sensor_id or window parameter.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "invalid_sensor": {
+                    "value": {
+                      "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"
+                    }
+                  },
+                  "invalid_window": {
+                    "value": {
+                      "detail": "Invalid window: 45. Allowed values are: [30, 60, 120, 300, 600]"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No test is currently running.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test is currently running"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -428,7 +799,7 @@
           "sensor"
         ],
         "summary": "Get Sensor Raw Data",
-        "description": "Get the latest raw (uncalibrated) data point from a sensor.",
+        "description": "Get the latest raw (uncalibrated) data point from a sensor.\nTime is relative to test start if a test is running, otherwise 0.",
         "operationId": "get_sensor_raw_data_api_sensor__sensor_id__raw_get",
         "parameters": [
           {
@@ -452,6 +823,16 @@
               }
             }
           },
+          "400": {
+            "description": "Invalid sensor_id provided.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -466,6 +847,57 @@
       }
     },
     "/api/sensor/{sensor_id}/zero": {
+      "get": {
+        "tags": [
+          "sensor"
+        ],
+        "summary": "Get Sensor Zero Offset",
+        "description": "Get the current zero offset applied to raw readings for a sensor.\nThe offset represents how much raw values are shifted to compute calibrated values.",
+        "operationId": "get_sensor_zero_offset_api_sensor__sensor_id__zero_get",
+        "parameters": [
+          {
+            "name": "sensor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sensor Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OffsetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid sensor_id provided.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "put": {
         "tags": [
           "sensor"
@@ -487,6 +919,16 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid sensor_id provided.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -551,6 +993,19 @@
         ],
         "title": "HistoryList"
       },
+      "OffsetResponse": {
+        "properties": {
+          "offset": {
+            "type": "number",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "offset"
+        ],
+        "title": "OffsetResponse"
+      },
       "Point": {
         "properties": {
           "time": {
@@ -605,31 +1060,38 @@
           },
           "dim_length": {
             "type": "number",
-            "title": "Dim Length"
+            "title": "Dim Length",
+            "default": 0.0
           },
           "dim_height": {
             "type": "number",
-            "title": "Dim Height"
+            "title": "Dim Height",
+            "default": 0.0
           },
           "dim_width": {
             "type": "number",
-            "title": "Dim Width"
+            "title": "Dim Width",
+            "default": 0.0
           },
           "loading_mode": {
             "type": "string",
-            "title": "Loading Mode"
+            "title": "Loading Mode",
+            "default": ""
           },
           "sensor_spacing": {
             "type": "number",
-            "title": "Sensor Spacing"
+            "title": "Sensor Spacing",
+            "default": 0.0
           },
           "ext_support_spacing": {
             "type": "number",
-            "title": "Ext Support Spacing"
+            "title": "Ext Support Spacing",
+            "default": 0.0
           },
           "load_point_spacing": {
             "type": "number",
-            "title": "Load Point Spacing"
+            "title": "Load Point Spacing",
+            "default": 0.0
           }
         },
         "type": "object",
@@ -637,17 +1099,32 @@
           "test_id",
           "date",
           "operator_name",
-          "specimen_code",
-          "dim_length",
-          "dim_height",
-          "dim_width",
-          "loading_mode",
-          "sensor_spacing",
-          "ext_support_spacing",
-          "load_point_spacing"
+          "specimen_code"
         ],
         "title": "TestMetaData",
         "description": "Data class representing metadata for a test.\nCompatible with both dataclass operations and Pydantic validation."
+      },
+      "TestState": {
+        "type": "string",
+        "enum": [
+          "nothing",
+          "prepared",
+          "running"
+        ],
+        "title": "TestState",
+        "description": "Enumeration of all possible test states."
+      },
+      "TestStatusResponse": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/TestState"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "TestStatusResponse"
       },
       "ValidationError": {
         "properties": {
