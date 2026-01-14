@@ -9,6 +9,7 @@ case "${1:-api}" in
     hatch run test
     ;;
   doc)
+    hatch run python scripts/export_openapi.py
     hatch run docs:serve
     ;;
   export-openapi)
