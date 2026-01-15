@@ -97,6 +97,10 @@ The documentation includes:
     - `PUT /{name}` → Update test metadata
     - `PUT /{name}/archive` → Move test to archive
     - `DELETE /{name}` → Permanently delete test
+  - `/graphique` — Real-time plot visualization
+    - `GET /` → Get current test graphique as PNG (X=DISP_1, Y=FORCE)
+      - Returns blank white canvas if no test running
+      - Points added automatically as data is processed (20 Hz)
 
 ## Performance optimizations
 

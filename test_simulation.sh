@@ -31,8 +31,8 @@ done
 echo -e "${GREEN}✓ API accessible!${NC}"
 echo ""
 
-# Démarrer un test
-echo -e "${YELLOW}Démarrage d'un test...${NC}"
+# Définir les métadonnées du test
+echo -e "${YELLOW}Définition des métadonnées du test...${NC}"
 TEST_PAYLOAD='{
   "test_id": "simulation_test",
   "date": "'$(date +%Y-%m-%d)'",
@@ -47,14 +47,28 @@ TEST_PAYLOAD='{
   "load_point_spacing": 15.0
 }'
 
-START_RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "${BASE_URL}/api/test/start" \
+INFO_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/api/test/info" \
   -H "Content-Type: application/json" \
   -d "$TEST_PAYLOAD")
 
+HTTP_CODE=$(echo "$INFO_RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" -eq 204 ]; then
+  echo -e "${GREEN}✓ Métadonnées définies${NC}"
+else
+  echo -e "${RED}✗ Échec de la définition des métadonnées (HTTP $HTTP_CODE)${NC}"
+  echo -e "${RED}Réponse: $(echo "$INFO_RESPONSE" | head -n-1)${NC}"
+  exit 1
+fi
+
+# Démarrer le test
+echo -e "${YELLOW}Démarrage du test...${NC}"
+START_RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "${BASE_URL}/api/test/start")
+
 HTTP_CODE=$(echo "$START_RESPONSE" | tail -n1)
 
-if [ "$HTTP_CODE" -eq 204 ] || [ "$HTTP_CODE" -eq 409 ]; then
-  echo -e "${GREEN}✓ Test actif${NC}"
+if [ "$HTTP_CODE" -eq 204 ]; then
+  echo -e "${GREEN}✓ Test démarré${NC}"
 else
   echo -e "${RED}✗ Échec du démarrage du test (HTTP $HTTP_CODE)${NC}"
   echo -e "${RED}Réponse: $(echo "$START_RESPONSE" | head -n-1)${NC}"

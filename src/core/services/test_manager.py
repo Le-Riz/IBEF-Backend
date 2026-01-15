@@ -7,6 +7,9 @@ import time
 import csv
 from typing import List, Optional, Any, Dict
 from dataclasses import asdict
+import io
+
+from PIL import Image, ImageDraw, ImageFont
 
 from core.models.test_data import TestMetaData
 from core.models.test_state import TestState
@@ -26,7 +29,7 @@ ARCHIVE_DIR = os.path.join(STORAGE_ROOT, "archived_data")
 # Sampling frequency per sensor type (Hz - points per second)
 # Used to calculate buffer capacity and reference array sizes
 # Default: 20 Hz (50ms between points)
-SENSOR_SAMPLING_FREQ = 20.0
+SENSOR_SAMPLING_FREQ = 10.0
 
 
 class TestManager:
@@ -51,6 +54,17 @@ class TestManager:
         self.raw_csv_file = None       # raw_data.csv - uncalibrated sensor data
         self.raw_csv_writer = None
         self.current_test_dir = None
+        
+        # PIL Images for graphiques (DISP_1 and ARC)
+        self.graphique_disp1_image = None
+        self.graphique_disp1_draw = None
+        self.graphique_arc_image = None
+        self.graphique_arc_draw = None
+        self.graphique_width = 1000
+        self.graphique_height = 700
+        self.graphique_margin = 50
+        self.graphique_disp1_last_point = None  # Track last point for DISP_1 line drawing
+        self.graphique_arc_last_point = None    # Track last point for ARC line drawing
 
         # Ensure dirs
         os.makedirs(TEST_DATA_DIR, exist_ok=True)
@@ -170,6 +184,19 @@ class TestManager:
         self.raw_csv_file = open(os.path.join(self.current_test_dir, "raw_data.csv"), 'w', newline='')
         self.raw_csv_writer = None
         
+        # Initialize both graphiques (DISP_1 and ARC)
+        # DISP_1 graphique
+        self.graphique_disp1_image = Image.new('RGBA', (self.graphique_width, self.graphique_height), (255, 255, 255, 0))
+        self.graphique_disp1_draw = ImageDraw.Draw(self.graphique_disp1_image)
+        self.graphique_disp1_last_point = None
+        # ARC graphique
+        self.graphique_arc_image = Image.new('RGBA', (self.graphique_width, self.graphique_height), (255, 255, 255, 0))
+        self.graphique_arc_draw = ImageDraw.Draw(self.graphique_arc_image)
+        self.graphique_arc_last_point = None
+        # Draw axes on both
+        self._draw_graphique_axes('DISP_1')
+        self._draw_graphique_axes('ARC')
+        
         self.is_running = True
         # Clear data storage for new test
         self.data_storage.clear_all()
@@ -197,6 +224,17 @@ class TestManager:
                 self.raw_csv_file.close()
                 self.raw_csv_file = None
                 self.csv_writer = None
+            
+            # Save graphiques to test directory before cleanup
+            self._save_graphiques()
+            
+            # Clean up PIL images
+            self.graphique_disp1_image = None
+            self.graphique_disp1_draw = None
+            self.graphique_disp1_last_point = None
+            self.graphique_arc_image = None
+            self.graphique_arc_draw = None
+            self.graphique_arc_last_point = None
             
             self.reload_history() # Refresh list
             self.is_running = False
@@ -272,6 +310,18 @@ class TestManager:
         rel_time = t - self.start_time
         values = frame["values"]
         
+        # Plot points on both graphiques
+        disp1_value = values[SensorId.DISP_1.value]
+        arc_value = values[SensorId.ARC.value]
+        force_value = values[SensorId.FORCE.value]
+        
+        # Debug: log values occasionally
+        if int(rel_time * 10) % 20 == 0:  # Every 2 seconds
+            logger.info(f"Graph values - DISP_1: {disp1_value:.3f}, ARC: {arc_value:.3f}, FORCE: {force_value:.3f}")
+        
+        self._plot_point_on_graphique('DISP_1', disp1_value, force_value)
+        self._plot_point_on_graphique('ARC', arc_value, force_value)
+        
         # CSV Writing
         if self.csv_file:
             if self.csv_writer is None:
@@ -314,6 +364,229 @@ class TestManager:
         if self.is_running and self.start_time > 0:
             return time.time() - self.start_time
         return 0.0
+
+    def _draw_graphique_axes(self, sensor_name: str):
+        """Draw X and Y axes on the graphique with labels and units.
+        
+        Args:
+            sensor_name: Either 'DISP_1' or 'ARC' to determine which graphique to draw on
+        """
+        if sensor_name == 'DISP_1':
+            draw = self.graphique_disp1_draw
+            x_label = "DISP_1 (mm)"
+            x_max = 15.0
+            x_min = 0.0
+        elif sensor_name == 'ARC':
+            draw = self.graphique_arc_draw
+            x_label = "ARC (mm)"
+            x_max = 5.0  # ARC range: -5 to +5 mm
+            x_min = -5.0
+        else:
+            return
+        
+        if draw is None:
+            return
+        
+        # Axis color (black)
+        axis_color = 'black'
+        axis_width = 4
+        text_color = 'black'
+        
+        # Try to use a default font, fall back to default if not available
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+        except:
+            font = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+        
+        # X axis (bottom)
+        x_axis_y = self.graphique_height - self.graphique_margin
+        draw.line(
+            [(self.graphique_margin, x_axis_y), 
+             (self.graphique_width - self.graphique_margin, x_axis_y)],
+            fill=axis_color,
+            width=axis_width
+        )
+        
+        # Y axis (left)
+        y_axis_x = self.graphique_margin
+        draw.line(
+            [(y_axis_x, self.graphique_margin), 
+             (y_axis_x, self.graphique_height - self.graphique_margin)],
+            fill=axis_color,
+            width=axis_width
+        )
+        
+        # Draw ticks and labels on X axis
+        tick_size = 10
+        tick_interval = 2 if sensor_name == 'ARC' else 3  # ARC: every 2, DISP_1: every 3
+        x_range = x_max - x_min
+        
+        # Generate tick values based on range
+        if sensor_name == 'ARC':
+            tick_values = range(int(x_min), int(x_max) + 1, tick_interval)
+        else:
+            tick_values = range(int(x_min), int(x_max) + 1, tick_interval)
+        
+        for x_val in tick_values:
+            # Map x_val to pixel position
+            pixel_x = self.graphique_margin + ((x_val - x_min) / x_range) * (self.graphique_width - 2 * self.graphique_margin)
+            # Draw tick
+            draw.line(
+                [(pixel_x, x_axis_y), (pixel_x, x_axis_y + tick_size)],
+                fill=axis_color,
+                width=3
+            )
+            # Draw label
+            label = str(x_val)
+            draw.text(
+                (pixel_x - 15, x_axis_y + tick_size + 10),
+                label,
+                fill=text_color,
+                font=font_small
+            )
+        
+        # X axis label
+        draw.text(
+            (self.graphique_width - 220, self.graphique_height - 30),
+            x_label,
+            fill=text_color,
+            font=font
+        )
+        
+        # Draw ticks and labels on Y axis (FORCE: 0-1000 N)
+        force_max = 1000.0
+        force_interval = 200  # Every 200 units
+        
+        for force_val in range(0, int(force_max) + 1, force_interval):
+            pixel_y = self.graphique_height - self.graphique_margin - (force_val / force_max) * (self.graphique_height - 2 * self.graphique_margin)
+            # Draw tick
+            draw.line(
+                [(y_axis_x - tick_size, pixel_y), (y_axis_x, pixel_y)],
+                fill=axis_color,
+                width=3
+            )
+            # Draw label
+            label = str(int(force_val))
+            draw.text(
+                (y_axis_x - 55, pixel_y - 10),
+                label,
+                fill=text_color,
+                font=font_small
+            )
+        
+        # Y axis label
+        draw.text(
+            (5, 10),
+            "FORCE (N)",
+            fill=text_color,
+            font=font
+        )
+
+    def _plot_point_on_graphique(self, sensor_name: str, x_value: float, force: float):
+        """Add a point to the graphique (X=sensor_value, Y=FORCE) and draw line to previous point.
+        
+        Args:
+            sensor_name: Either 'DISP_1' or 'ARC' to determine which graphique to plot on
+            x_value: The X-axis value (DISP_1 or ARC value)
+            force: The Y-axis value (FORCE)
+        """
+        if not self.is_running:
+            return
+        
+        # Select appropriate graphique
+        if sensor_name == 'DISP_1':
+            draw = self.graphique_disp1_draw
+            last_point = self.graphique_disp1_last_point
+            x_max = 15.0
+            x_min = 0.0
+        elif sensor_name == 'ARC':
+            draw = self.graphique_arc_draw
+            last_point = self.graphique_arc_last_point
+            x_max = 5.0
+            x_min = -5.0
+        else:
+            return
+        
+        if draw is None:
+            return
+        
+        # Scaling parameters
+        force_max = 1000.0
+        x_range = x_max - x_min
+        
+        # Convert data to pixel coordinates
+        # X axis: left margin to right margin
+        pixel_x = self.graphique_margin + ((x_value - x_min) / x_range) * (self.graphique_width - 2 * self.graphique_margin)
+        # Y axis: inverted (top is 0, bottom is max)
+        pixel_y = self.graphique_height - self.graphique_margin - (force / force_max) * (self.graphique_height - 2 * self.graphique_margin)
+        
+        # Clamp to canvas bounds
+        pixel_x = max(self.graphique_margin, min(self.graphique_width - self.graphique_margin, pixel_x))
+        pixel_y = max(self.graphique_margin, min(self.graphique_height - self.graphique_margin, pixel_y))
+        
+        current_point = (pixel_x, pixel_y)
+        
+        # Draw line from last point to current point
+        if last_point is not None:
+            draw.line(
+                [last_point, current_point],
+                fill='black',
+                width=4
+            )
+        
+        # Update last point
+        if sensor_name == 'DISP_1':
+            self.graphique_disp1_last_point = current_point
+        else:
+            self.graphique_arc_last_point = current_point
+
+    def _save_graphiques(self):
+        """Save both graphiques as PNG files in the test directory."""
+        if self.current_test_dir is None:
+            logger.warning("Cannot save graphiques: no test directory")
+            return
+        
+        # Save DISP_1 graphique
+        if self.graphique_disp1_image is not None:
+            disp1_path = os.path.join(self.current_test_dir, "graph_DISP_1.png")
+            try:
+                self.graphique_disp1_image.save(disp1_path, format='PNG')
+                logger.info(f"Saved DISP_1 graphique to {disp1_path}")
+            except Exception as e:
+                logger.error(f"Failed to save DISP_1 graphique: {e}")
+        
+        # Save ARC graphique
+        if self.graphique_arc_image is not None:
+            arc_path = os.path.join(self.current_test_dir, "graph_ARC.png")
+            try:
+                self.graphique_arc_image.save(arc_path, format='PNG')
+                logger.info(f"Saved ARC graphique to {arc_path}")
+            except Exception as e:
+                logger.error(f"Failed to save ARC graphique: {e}")
+
+    def get_graphique_png(self, sensor_name: str) -> bytes:
+        """Return the graphique as PNG bytes.
+        
+        Args:
+            sensor_name: Either 'DISP_1' or 'ARC' to determine which graphique to return
+        """
+        if sensor_name == 'DISP_1':
+            image = self.graphique_disp1_image
+        elif sensor_name == 'ARC':
+            image = self.graphique_arc_image
+        else:
+            image = None
+        
+        if image is None:
+            # Return a blank canvas if no test running
+            image = Image.new('RGBA', (self.graphique_width, self.graphique_height), (255, 255, 255, 0))
+        
+        # Convert to PNG bytes
+        buffer = io.BytesIO()
+        image.save(buffer, format='PNG')
+        return buffer.getvalue()
 
     def get_description(self, test_id: str) -> str:
         """Get the description.md content for a test."""
