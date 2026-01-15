@@ -8,3 +8,4 @@ class SensorId(Enum):
     DISP_1 = 1
     DISP_2 = 2
     DISP_3 = 3
+    ARC = 4

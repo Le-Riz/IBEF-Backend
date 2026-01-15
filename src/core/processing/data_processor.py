@@ -47,9 +47,14 @@ class DataProcessor:
             # TODO: Linear interpolation if we wanted to be fancy, but Sample & Hold is sufficient 
             # and causal for real-time monitoring.
             
+            # Calculate ARC (circular deflection): DISP_1 - (DISP_2 + DISP_3) / 2
+            values_copy = self.latest_values.copy()
+            arc_value = values_copy[SensorId.DISP_1.value] - (values_copy[SensorId.DISP_2.value] + values_copy[SensorId.DISP_3.value]) / 2
+            values_copy[SensorId.ARC.value] = arc_value
+            
             frame = {
                 "timestamp": start_loop,
-                "values": self.latest_values.copy(),
+                "values": values_copy,
             }
             
             # Emit processed frame for UI and Recorder

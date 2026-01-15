@@ -79,12 +79,13 @@ The documentation includes:
   - Returns: `{"status": "ok", "app": "IBEF Backend API"}`
   
 - `GET /api`
-  - `/sensor/{sensor_id}` — Sensor data operations (FORCE, DISP_1, DISP_2, DISP_3)
+  - `/sensor/{sensor_id}` — Sensor data operations (FORCE, DISP_1, DISP_2, DISP_3, ARC)
+    - **ARC** is a calculated sensor representing circular deflection: `ARC = DISP_1 - (DISP_2 + DISP_3) / 2`
     - `GET /data` → Latest calibrated data point: `{"time": float, "value": float}`
     - `GET /data/history?window={30,60,120,300,600}` → Fixed-count history with uniform spacing
       - Returns exactly 300 points regardless of window duration
       - Uses 10 Hz processing rate for point spacing
-    - `GET /raw` → Latest raw/uncalibrated data point
+    - `GET /raw` → Latest raw/uncalibrated data point (physical sensors only)
     - `PUT /zero` → Calibrate sensor (zero reference)
   - `/test` — Test session management
     - `PUT /start` → Start test with metadata payload
