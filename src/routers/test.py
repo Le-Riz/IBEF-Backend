@@ -13,13 +13,15 @@ async def get_test_state() -> TestStatusResponse:
     """
     Get the current state of the test system.
     
-    Returns one of three possible states:
-    - **NOTHING**: No test is running AND no test metadata has been prepared.
+    Returns one of four possible states:
+    - **NOTHING**: No test is running, no test is stopped, AND no test metadata has been prepared.
       Ready to start fresh.
-    - **PREPARED**: No test is currently running BUT test metadata has been set.
+    - **PREPARED**: No test is currently running AND no test stopped, BUT test metadata has been set.
       Ready to call PUT /start to begin the test.
     - **RUNNING**: A test is currently executing and recording data.
-      Data is being collected; call PUT /stop to end the test.
+      Data is being collected; call PUT /stop to end recording.
+    - **STOPPED**: A test has stopped recording BUT not yet finalized.
+      Review the data, then call PUT /finalize to move to history.
     """
     state = test_manager.get_test_state()
     return TestStatusResponse(status=state)
@@ -90,10 +92,11 @@ async def start_test() -> None:
 @router.put("/stop", status_code=204)
 async def stop_test() -> None:
     """
-    Stop the currently running test and save all recorded data.
+    Stop the currently running test and end data recording.
     
-    Changes state from RUNNING to NOTHING.
-    Test data is persisted to disk.
+    Changes state from RUNNING to STOPPED.
+    Test data is preserved in memory and on disk but not yet moved to history.
+    Call PUT /finalize to move the test to history.
     """
     # Stop the current test via TestManager
     test_manager.stop_test()
@@ -166,3 +169,40 @@ async def update_current_test_description(payload: dict) -> None:
     
     if not test_manager.set_description(test_id, content):
         raise HTTPException(status_code=500, detail="Failed to update description")
+
+
+@router.put("/finalize", status_code=204, responses={
+    400: {
+        "description": "No test in STOPPED state to finalize.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "No test to finalize."}
+            }
+        }
+    },
+    409: {
+        "description": "Test is still running. Call PUT /stop first.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Test is not stopped. Call PUT /stop first."}
+            }
+        }
+    }
+})
+async def finalize_test() -> None:
+    """
+    Finalize a stopped test and move it to history.
+    
+    Changes state from STOPPED to NOTHING.
+    Test data is now part of the historical record and cannot be modified.
+    
+    Requires that the test has been stopped via PUT /stop first.
+    """
+    try:
+        test_manager.finalize_test()
+    except ValueError as e:
+        # No test to finalize
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        # Test is not stopped
+        raise HTTPException(status_code=409, detail=str(e))

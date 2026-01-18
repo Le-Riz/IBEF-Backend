@@ -7,6 +7,7 @@ import logging
 from routers.api import router as api_router
 from schemas import AppHealthOK
 from core.service_manager import service_manager
+from core.config_loader import config_loader
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,9 @@ class Settings(BaseSettings):
     debug: bool = True
     # Allow emulation mode if no serial port is found
     # If False, the app will crash if no serial port is available
-    emulation_mode: bool = os.getenv("EMULATION_MODE", "true").lower() == "true"
+    # Can be overridden by environment variable or config file
+    emulation_mode: bool = os.getenv("EMULATION_MODE", "").lower() == "true" \
+        if os.getenv("EMULATION_MODE") else config_loader.get_emulation_mode()
 
 
 settings = Settings()

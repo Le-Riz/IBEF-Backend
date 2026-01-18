@@ -8,6 +8,7 @@ from typing import Dict, Optional
 from core.models.sensor_data import SensorData
 from core.models.sensor_enum import SensorId
 from core.event_hub import event_hub
+from core.sensor_reconnection import sensor_reconnection_manager
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +19,11 @@ class SensorManager:
     def __init__(self):
         self.running = False
         self.emulation_mode = False
-        # Store current sensor values: List indexed by SensorId.value - 1
+        # Store current sensor values: List indexed by SensorId.value
         self.sensors: list[float] = [0.0 for _ in SensorId]
         self._thread: Optional[threading.Thread] = None
         self.motion_sensor_map: Dict[str, SensorId] = {}
-        # Store offsets: List indexed by SensorId.value - 1
+        # Store offsets: List indexed by SensorId.value
         self.offsets: list[float] = [0.0 for _ in SensorId]
         
         # Subscribe to serial data from the global handler
@@ -117,10 +118,17 @@ class SensorManager:
         if sender_id and val is not None:
             # Map sender_id to DISP_X
             if sender_id not in self.motion_sensor_map:
-                # Assign next available DISP
+                # Assign next available DISP (up to DISP_5)
                 count = len(self.motion_sensor_map)
-                if count < 3:
-                    self.motion_sensor_map[sender_id] = [SensorId.DISP_1, SensorId.DISP_2, SensorId.DISP_3][count]
+                disp_order = [
+                    SensorId.DISP_1,
+                    SensorId.DISP_2,
+                    SensorId.DISP_3,
+                    SensorId.DISP_4,
+                    SensorId.DISP_5,
+                ]
+                if count < len(disp_order):
+                    self.motion_sensor_map[sender_id] = disp_order[count]
             
             sensor_id = self.motion_sensor_map.get(sender_id)
             if sensor_id:
@@ -138,11 +146,18 @@ class SensorManager:
         self._notify(SensorId.DISP_1, disp_val)
         self._notify(SensorId.DISP_2, disp_val * 1.1)
         self._notify(SensorId.DISP_3, disp_val * 0.9)
+        self._notify(SensorId.DISP_4, disp_val * 1.05)
+        self._notify(SensorId.DISP_5, disp_val * 0.95)
 
     def _notify(self, sensor_id: SensorId, value: float):
         # Apply offset
         offset = self.offsets[sensor_id.value]
         corrected_value = value - offset
+
+        # Record data reception for health monitoring (in hardware mode)
+        if not self.emulation_mode:
+            sensor_name = sensor_id.name
+            sensor_reconnection_manager.record_sensor_data(sensor_name)
 
         # Publish raw value (before offset correction)
         raw_data = SensorData(

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The ARC sensor is a **calculated sensor** that represents the circular deflection (fléche circulaire) of a test specimen. Unlike physical sensors (FORCE, DISP_1, DISP_2, DISP_3), ARC is computed in real-time from the three displacement sensors.
+The ARC sensor is a **calculated sensor** that represents the circular deflection (fléche circulaire) of a test specimen. Unlike physical sensors (FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5), ARC is computed in real-time from the primary three displacement sensors.
 
 ## Calculation Formula
 
@@ -48,7 +48,7 @@ PUT /api/sensor/ARC/zero
 
 ARC values are automatically included in test data files:
 
-- **data.csv**: Contains ARC column alongside FORCE, DISP_1, DISP_2, DISP_3
+- **data.csv**: Contains ARC column alongside FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5
 - **Circular buffers**: ARC has its own buffer for real-time history access
 - **Test archives**: ARC data is preserved in archived tests
 
@@ -92,7 +92,7 @@ SensorId.ARC  # Value: 4
 
 In a three-point bending test:
 - DISP_1: Central load point displacement
-- DISP_2, DISP_3: Support point displacements
+- DISP_2, DISP_3: Support point displacements (DISP_4/DISP_5 are additional channels not used in ARC)
 - ARC: True specimen deflection (accounting for support settlement)
 
 ### 3. Quality Control Threshold

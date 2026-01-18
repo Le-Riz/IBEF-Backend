@@ -7,3 +7,4 @@ class TestState(Enum):
     NOTHING = "nothing"
     PREPARED = "prepared"
     RUNNING = "running"
+    STOPPED = "stopped"  # Test stopped (recording ended) but not yet finalized

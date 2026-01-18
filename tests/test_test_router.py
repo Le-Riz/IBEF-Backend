@@ -27,8 +27,11 @@ def test_test_start_endpoint() -> None:
     response = client.put("/api/test/start")
     assert response.status_code == 204
     
-    # Clean up
-    client.put("/api/test/stop")
+    # Clean up: stop then finalize
+    stop_response = client.put("/api/test/stop")
+    assert stop_response.status_code == 204
+    finalize_response = client.put("/api/test/finalize")
+    assert finalize_response.status_code == 204
 
 
 def test_test_start_without_payload() -> None:

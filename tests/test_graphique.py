@@ -84,8 +84,10 @@ class TestGraphique:
         assert response_arc.status_code == 200
         assert response_arc.headers["content-type"] == "image/png"
         
-        # Clean up
+        # Clean up - start, stop, and finalize
+        client.put("/api/test/start")
         client.put("/api/test/stop")
+        client.put("/api/test/finalize")
 
     def test_graphique_dimensions(self):
         """Test that graphique has expected dimensions."""

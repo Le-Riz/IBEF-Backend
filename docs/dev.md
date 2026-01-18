@@ -63,7 +63,7 @@ The OpenAPI schema is automatically generated from the FastAPI app and embedded 
 - Supports bulk retrieval with automatic wrap detection
 
 **SensorDataStorage** (`src/core/models/circular_buffer.py`)
-- Manages multiple sensor buffers (FORCE, DISP_1, DISP_2, DISP_3)
+- Manages multiple sensor buffers (FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5)
 - Precomputes all window offsets at initialization (O(1) lookup)
 - Returns exactly 300 points per duration with uniform spacing
 

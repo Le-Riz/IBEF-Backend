@@ -4,13 +4,33 @@ import time
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.core.services.test_manager import TEST_DATA_DIR
+from core.services.test_manager import TEST_DATA_DIR
+from core.services.test_manager import test_manager
 
 client = TestClient(app)
 
 
+def find_test_name(prefix: str) -> str:
+    """Return the most recent history entry matching the given prefix."""
+    list_resp = client.get("/api/history")
+    histories = list_resp.json()["list"]
+    matches = [h for h in histories if h.startswith(prefix)]
+    assert matches, f"No history entry found for prefix {prefix}"
+    return max(matches)
+
+
+def reset_test_state() -> None:
+    """Reset test_manager to NOTHING state (cleanup before tests)."""
+    if test_manager.is_running:
+        test_manager.stop_test()
+    if test_manager.is_stopped:
+        test_manager.finalize_test()
+
+
 def test_raw_data_csv_creation() -> None:
     """Test that raw_data.csv is created when a test runs"""
+    reset_test_state()
+    
     # Prepare test
     payload = {
         "test_id": "test_raw_data",
@@ -41,10 +61,12 @@ def test_raw_data_csv_creation() -> None:
     stop_resp = client.put("/api/test/stop")
     assert stop_resp.status_code == 204
     
-    # Get test name from history
-    list_resp = client.get("/api/history")
-    histories = list_resp.json()["list"]
-    test_name = histories[0]
+    # Finalize test
+    finalize_resp = client.put("/api/test/finalize")
+    assert finalize_resp.status_code == 204
+    
+    # Get test name from history (most recent matching prefix)
+    test_name = find_test_name("test_raw_data")
     
     # Check that raw_data.csv exists
     test_dir = os.path.join(TEST_DATA_DIR, test_name)
@@ -60,6 +82,8 @@ def test_raw_data_csv_creation() -> None:
 
 def test_description_md_creation() -> None:
     """Test that description.md is created when test is prepared"""
+    reset_test_state()
+    
     payload = {
         "test_id": "test_desc_creation",
         "date": "2026-01-14",
@@ -86,10 +110,12 @@ def test_description_md_creation() -> None:
     stop_resp = client.put("/api/test/stop")
     assert stop_resp.status_code == 204
     
+    # Finalize test
+    finalize_resp = client.put("/api/test/finalize")
+    assert finalize_resp.status_code == 204
+    
     # Get test name from history
-    list_resp = client.get("/api/history")
-    histories = list_resp.json()["list"]
-    test_name = histories[0]
+    test_name = find_test_name("test_desc_creation")
     
     # Check that description.md exists
     test_dir = os.path.join(TEST_DATA_DIR, test_name)
@@ -106,6 +132,8 @@ def test_description_md_creation() -> None:
 
 def test_get_description_no_test() -> None:
     """Test GET /api/test/description with no test prepared"""
+    reset_test_state()
+    
     response = client.get("/api/test/description")
     assert response.status_code == 409
     data = response.json()
@@ -114,6 +142,8 @@ def test_get_description_no_test() -> None:
 
 def test_put_description_no_test() -> None:
     """Test PUT /api/test/description with no test prepared"""
+    reset_test_state()
+    
     response = client.put("/api/test/description", json={"content": "test"})
     assert response.status_code == 409
     data = response.json()
@@ -122,6 +152,8 @@ def test_put_description_no_test() -> None:
 
 def test_description_in_prepared_state() -> None:
     """Test that description can be GET and PUT in PREPARED state"""
+    reset_test_state()
+    
     payload = {
         "test_id": "test_prepared_desc",
         "date": "2026-01-14",
@@ -159,13 +191,16 @@ def test_description_in_prepared_state() -> None:
     data2 = get_resp2.json()
     assert data2["content"] == new_content
     
-    # Clean up - start and stop test
+    # Clean up - start, stop, and finalize test
     client.put("/api/test/start")
     client.put("/api/test/stop")
+    client.put("/api/test/finalize")
 
 
 def test_description_in_running_state() -> None:
     """Test that description can be GET and PUT in RUNNING state"""
+    reset_test_state()
+    
     payload = {
         "test_id": "test_running_desc",
         "date": "2026-01-14",
@@ -204,12 +239,15 @@ def test_description_in_running_state() -> None:
     data2 = get_resp2.json()
     assert data2["content"] == new_content
     
-    # Clean up - stop test
+    # Clean up - stop and finalize test
     client.put("/api/test/stop")
+    client.put("/api/test/finalize")
 
 
 def test_history_description_endpoints() -> None:
     """Test GET and PUT /api/history/{name}/description"""
+    reset_test_state()
+    
     payload = {
         "test_id": "test_history_desc",
         "date": "2026-01-14",
@@ -234,10 +272,12 @@ def test_history_description_endpoints() -> None:
     stop_resp = client.put("/api/test/stop")
     assert stop_resp.status_code == 204
     
+    # Finalize to move to history
+    finalize_resp = client.put("/api/test/finalize")
+    assert finalize_resp.status_code == 204
+    
     # Get test name from history
-    list_resp = client.get("/api/history")
-    histories = list_resp.json()["list"]
-    test_name = histories[0]
+    test_name = find_test_name("test_history_desc")
     
     # GET description via history endpoint
     get_resp = client.get(f"/api/history/{test_name}/description")
@@ -260,6 +300,8 @@ def test_history_description_endpoints() -> None:
 
 def test_description_not_in_metadata() -> None:
     """Test that description field is NOT in metadata.json"""
+    reset_test_state()
+    
     payload = {
         "test_id": "test_no_desc_in_meta",
         "date": "2026-01-14",
@@ -284,10 +326,12 @@ def test_description_not_in_metadata() -> None:
     stop_resp = client.put("/api/test/stop")
     assert stop_resp.status_code == 204
     
+    # Finalize to move to history
+    finalize_resp = client.put("/api/test/finalize")
+    assert finalize_resp.status_code == 204
+    
     # Get metadata via history endpoint
-    list_resp = client.get("/api/history")
-    histories = list_resp.json()["list"]
-    test_name = histories[0]
+    test_name = find_test_name("test_no_desc_in_meta")
     
     meta_resp = client.get(f"/api/history/{test_name}")
     assert meta_resp.status_code == 200
@@ -306,6 +350,8 @@ def test_description_not_in_metadata() -> None:
 
 def test_description_persistence() -> None:
     """Test that description modifications persist to disk"""
+    reset_test_state()
+    
     payload = {
         "test_id": "test_persist_desc_final",
         "date": "2026-01-14",
@@ -342,6 +388,10 @@ def test_description_persistence() -> None:
     stop_resp = client.put("/api/test/stop")
     assert stop_resp.status_code == 204
     
+    # Finalize to move to history
+    finalize_resp = client.put("/api/test/finalize")
+    assert finalize_resp.status_code == 204
+    
     # Get test name - should be the most recent one with our unique ID
     list_resp = client.get("/api/history")
     histories = list_resp.json()["list"]
@@ -367,7 +417,9 @@ def test_description_persistence() -> None:
 
 
 def test_test_state_transitions() -> None:
-    """Test that test states (NOTHING/PREPARED/RUNNING) work correctly with description"""
+    """Test that test states (NOTHING/PREPARED/RUNNING/STOPPED) work correctly with description"""
+    reset_test_state()
+    
     # Initial state: NOTHING
     running_resp = client.get("/api/test/running")
     assert running_resp.status_code == 200
@@ -418,15 +470,28 @@ def test_test_state_transitions() -> None:
     desc_resp3 = client.get("/api/test/description")
     assert desc_resp3.status_code == 200
     
-    # Stop test -> NOTHING
+    # Stop test -> STOPPED (not NOTHING anymore)
     stop_resp = client.put("/api/test/stop")
     assert stop_resp.status_code == 204
     
     running_resp4 = client.get("/api/test/running")
     assert running_resp4.status_code == 200
     status4 = running_resp4.json()["status"]
-    assert status4.upper() == "NOTHING"
+    assert status4.upper() == "STOPPED"
     
-    # Description should not be accessible in NOTHING state (after stop)
+    # Description SHOULD still be accessible in STOPPED state
     desc_resp4 = client.get("/api/test/description")
-    assert desc_resp4.status_code == 409
+    assert desc_resp4.status_code == 200
+    
+    # Finalize test -> NOTHING
+    finalize_resp = client.put("/api/test/finalize")
+    assert finalize_resp.status_code == 204
+    
+    running_resp5 = client.get("/api/test/running")
+    assert running_resp5.status_code == 200
+    status5 = running_resp5.json()["status"]
+    assert status5.upper() == "NOTHING"
+    
+    # Description should not be accessible in NOTHING state (after finalize)
+    desc_resp5 = client.get("/api/test/description")
+    assert desc_resp5.status_code == 409

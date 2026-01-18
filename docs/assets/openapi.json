@@ -458,7 +458,7 @@
           "test"
         ],
         "summary": "Get Test State",
-        "description": "Get the current state of the test system.\n\nReturns one of three possible states:\n- **NOTHING**: No test is running AND no test metadata has been prepared.\n  Ready to start fresh.\n- **PREPARED**: No test is currently running BUT test metadata has been set.\n  Ready to call PUT /start to begin the test.\n- **RUNNING**: A test is currently executing and recording data.\n  Data is being collected; call PUT /stop to end the test.",
+        "description": "Get the current state of the test system.\n\nReturns one of four possible states:\n- **NOTHING**: No test is running, no test is stopped, AND no test metadata has been prepared.\n  Ready to start fresh.\n- **PREPARED**: No test is currently running AND no test stopped, BUT test metadata has been set.\n  Ready to call PUT /start to begin the test.\n- **RUNNING**: A test is currently executing and recording data.\n  Data is being collected; call PUT /stop to end recording.\n- **STOPPED**: A test has stopped recording BUT not yet finalized.\n  Review the data, then call PUT /finalize to move to history.",
         "operationId": "get_test_state_api_test_running_get",
         "responses": {
           "200": {
@@ -560,7 +560,7 @@
           "test"
         ],
         "summary": "Stop Test",
-        "description": "Stop the currently running test and save all recorded data.\n\nChanges state from RUNNING to NOTHING.\nTest data is persisted to disk.",
+        "description": "Stop the currently running test and end data recording.\n\nChanges state from RUNNING to STOPPED.\nTest data is preserved in memory and on disk but not yet moved to history.\nCall PUT /finalize to move the test to history.",
         "operationId": "stop_test_api_test_stop_put",
         "responses": {
           "204": {
@@ -658,6 +658,41 @@
         }
       }
     },
+    "/api/test/finalize": {
+      "put": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Finalize Test",
+        "description": "Finalize a stopped test and move it to history.\n\nChanges state from STOPPED to NOTHING.\nTest data is now part of the historical record and cannot be modified.\n\nRequires that the test has been stopped via PUT /stop first.",
+        "operationId": "finalize_test_api_test_finalize_put",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "No test in STOPPED state to finalize.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test to finalize."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Test is still running. Call PUT /stop first.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Test is not stopped. Call PUT /stop first."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sensor/{sensor_id}/data": {
       "get": {
         "tags": [
@@ -693,7 +728,17 @@
             "content": {
               "application/json": {
                 "example": {
-                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"
+                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5, ARC"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sensor is not currently connected.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Sensor FORCE is not connected"
                 }
               }
             }
@@ -758,7 +803,7 @@
                 "examples": {
                   "invalid_sensor": {
                     "value": {
-                      "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"
+                      "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5, ARC"
                     }
                   },
                   "invalid_window": {
@@ -776,6 +821,16 @@
               "application/json": {
                 "example": {
                   "detail": "No test is currently running"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sensor is not currently connected.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Sensor FORCE is not connected"
                 }
               }
             }
@@ -828,7 +883,17 @@
             "content": {
               "application/json": {
                 "example": {
-                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"
+                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5, ARC"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sensor is not currently connected.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Sensor FORCE is not connected"
                 }
               }
             }
@@ -881,7 +946,17 @@
             "content": {
               "application/json": {
                 "example": {
-                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"
+                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5, ARC"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sensor is not currently connected.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Sensor FORCE is not connected"
                 }
               }
             }
@@ -925,7 +1000,138 @@
             "content": {
               "application/json": {
                 "example": {
-                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"
+                  "detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5, ARC"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sensor is not currently connected.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Sensor FORCE is not connected"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/graph/{sensor_name}": {
+      "get": {
+        "tags": [
+          "graph"
+        ],
+        "summary": "Get Graphique",
+        "description": "Get the current test graphique as PNG image.\n\nArgs:\n    sensor_name: Either 'DISP_1' or 'ARC' for X-axis sensor\n\nY-axis: FORCE\nPoints are added in real-time as data is processed.",
+        "operationId": "get_graphique_api_graph__sensor_name__get",
+        "parameters": [
+          {
+            "name": "sensor_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Sensor name: DISP_1 or ARC",
+              "title": "Sensor Name"
+            },
+            "description": "Sensor name: DISP_1 or ARC"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid sensor_name provided.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "sensor_name must be 'DISP_1' or 'ARC'"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sensor is not currently connected.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Sensor FORCE is not connected"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/graph/{sensor_name}/base64": {
+      "get": {
+        "tags": [
+          "graph"
+        ],
+        "summary": "Get Graphique Base64",
+        "description": "Get the current test graphique as base64-encoded PNG.\n\nArgs:\n    sensor_name: Either 'DISP_1' or 'ARC' for X-axis sensor\n\nUseful for embedding in frontend applications.\nReturns: {\"data\": \"data:image/png;base64,...\"}",
+        "operationId": "get_graphique_base64_api_graph__sensor_name__base64_get",
+        "parameters": [
+          {
+            "name": "sensor_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Sensor name: DISP_1 or ARC",
+              "title": "Sensor Name"
+            },
+            "description": "Sensor name: DISP_1 or ARC"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid sensor_name provided.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "sensor_name must be 'DISP_1' or 'ARC'"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sensor is not currently connected.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Sensor FORCE is not connected"
                 }
               }
             }
@@ -1109,7 +1315,8 @@
         "enum": [
           "nothing",
           "prepared",
-          "running"
+          "running",
+          "stopped"
         ],
         "title": "TestState",
         "description": "Enumeration of all possible test states."

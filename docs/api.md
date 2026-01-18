@@ -6,10 +6,12 @@ The IBEF Backend exposes a comprehensive REST API for data acquisition, sensor m
     For a complete, interactive API reference with all endpoints, schemas, and the ability to try requests, see the **[API Reference](api-reference.md)** page (powered by ReDoc/OpenAPI).
 
 All endpoints follow RESTful principles with clear resource identification and consistent response codes:
+
 - **200 OK**: Successful GET request with response body
 - **204 No Content**: Successful PUT/POST/DELETE request without response body
 - **400 Bad Request**: Invalid request parameters
 - **404 Not Found**: Resource not found
+- **503 Service Unavailable**: Requested sensor is not currently connected (see [Sensor Connection Management](sensor-connection-management.md))
 
 ## Meta Endpoints
 
@@ -20,6 +22,7 @@ All endpoints follow RESTful principles with clear resource identification and c
 Returns basic service information.
 
 **Response:**
+
 ```json
 {
   "message": "IBEF Backend API"
@@ -33,6 +36,7 @@ Returns basic service information.
 Check if the API is running and healthy.
 
 **Response:**
+
 ```json
 {
   "status": "ok",
@@ -45,8 +49,9 @@ Check if the API is running and healthy.
 ## Sensor Endpoints
 
 All sensor operations are grouped under `/api/sensor/{sensor_id}` where `sensor_id` can be:
+
 - `FORCE` - Force sensor
-- `DISP_1`, `DISP_2`, `DISP_3` - Displacement sensors
+- `DISP_1`, `DISP_2`, `DISP_3`, `DISP_4`, `DISP_5` - Displacement sensors
 
 ### Get Latest Calibrated Data
 
@@ -55,6 +60,7 @@ All sensor operations are grouped under `/api/sensor/{sensor_id}` where `sensor_
 Get the most recent calibrated data point from a specific sensor.
 
 **Response:**
+
 ```json
 {
   "time": 1234567890.123,
@@ -63,6 +69,7 @@ Get the most recent calibrated data point from a specific sensor.
 ```
 
 **Example:**
+
 ```bash
 curl http://localhost:8000/api/sensor/FORCE/data
 ```
@@ -74,9 +81,11 @@ curl http://localhost:8000/api/sensor/FORCE/data
 Get historical calibrated data points from a specific sensor with uniform point spacing.
 
 **Query Parameters:**
+
 - `window` (optional, int) - Time window in seconds: 30, 60, 120, 300, or 600 (default: 30)
 
 **Response:**
+
 Always returns exactly **300 points** regardless of window duration, with uniform spacing based on 10 Hz processing rate.
 
 ```json
@@ -90,6 +99,7 @@ Always returns exactly **300 points** regardless of window duration, with unifor
 ```
 
 **Point spacing by window:**
+
 - 30s window: 0.1s spacing (30s ÷ 300 points)
 - 60s window: 0.2s spacing
 - 120s window: 0.4s spacing
@@ -97,6 +107,7 @@ Always returns exactly **300 points** regardless of window duration, with unifor
 - 600s window: 2.0s spacing
 
 **Examples:**
+
 ```bash
 # Get 30-second history (0.1s point spacing)
 curl http://localhost:8000/api/sensor/FORCE/data/history?window=30
@@ -114,6 +125,7 @@ curl http://localhost:8000/api/sensor/FORCE/data/history?window=300
 Get the most recent raw (uncalibrated) data point from a specific sensor.
 
 **Response:**
+
 ```json
 {
   "time": 1234567890.123,
@@ -122,6 +134,7 @@ Get the most recent raw (uncalibrated) data point from a specific sensor.
 ```
 
 **Example:**
+
 ```bash
 curl http://localhost:8000/api/sensor/FORCE/raw
 ```
@@ -130,16 +143,16 @@ curl http://localhost:8000/api/sensor/FORCE/raw
 
 **`PUT /api/sensor/{sensor_id}/zero`**
 
-Zero (calibrate) a sensor by recording its current value as the zero reference.
-
-All future readings from this sensor will be adjusted by subtracting this reference value.
+Zero (calibrate) a sensor by recording its current value as the zero reference. All future readings from this sensor will be adjusted by subtracting this reference value.
 
 **Response:**
-```
+
+```text
 204 No Content
 ```
 
 **Example:**
+
 ```bash
 curl -X PUT http://localhost:8000/api/sensor/FORCE/zero
 ```
@@ -155,6 +168,7 @@ curl -X PUT http://localhost:8000/api/sensor/FORCE/zero
 Start a new test session with optional metadata.
 
 **Request Body (optional):**
+
 ```json
 {
   "test_id": "test_001",
@@ -172,7 +186,8 @@ Start a new test session with optional metadata.
 ```
 
 **Response:**
-```
+
+```text
 204 No Content
 ```
 
@@ -183,11 +198,13 @@ Start a new test session with optional metadata.
 Stop the current test session.
 
 **Response:**
-```
+
+```text
 204 No Content
 ```
 
 **Example:**
+
 ```bash
 curl -X PUT http://localhost:8000/api/test/stop
 ```
@@ -203,6 +220,7 @@ curl -X PUT http://localhost:8000/api/test/stop
 List all available test histories.
 
 **Response:**
+
 ```json
 {
   "list": ["test_001", "test_002", "test_003"]
@@ -216,6 +234,7 @@ List all available test histories.
 Get metadata for a specific test.
 
 **Response:**
+
 ```json
 {
   "test_id": "test_001",
@@ -233,6 +252,7 @@ Get metadata for a specific test.
 ```
 
 **Example:**
+
 ```bash
 curl http://localhost:8000/api/history/test_001
 ```
@@ -244,12 +264,14 @@ curl http://localhost:8000/api/history/test_001
 Download complete test data as a ZIP file.
 
 **Response:**
-```
+
+```text
 application/zip
 (binary file content)
 ```
 
 **Example:**
+
 ```bash
 curl -O http://localhost:8000/api/history/test_001/download
 ```
@@ -261,6 +283,7 @@ curl -O http://localhost:8000/api/history/test_001/download
 Update metadata for a specific test.
 
 **Request Body:**
+
 ```json
 {
   "test_id": "test_001",
@@ -278,11 +301,13 @@ Update metadata for a specific test.
 ```
 
 **Response:**
-```
+
+```text
 204 No Content
 ```
 
 **Example:**
+
 ```bash
 curl -X PUT http://localhost:8000/api/history/test_001 \
   -H "Content-Type: application/json" \
@@ -296,11 +321,13 @@ curl -X PUT http://localhost:8000/api/history/test_001 \
 Archive a test by moving it to archived storage.
 
 **Response:**
-```
+
+```text
 204 No Content
 ```
 
 **Example:**
+
 ```bash
 curl -X PUT http://localhost:8000/api/history/test_001/archive
 ```
@@ -312,11 +339,13 @@ curl -X PUT http://localhost:8000/api/history/test_001/archive
 Permanently delete a test and all its data.
 
 **Response:**
-```
+
+```text
 204 No Content
 ```
 
 **Example:**
+
 ```bash
 curl -X DELETE http://localhost:8000/api/history/test_001
 ```

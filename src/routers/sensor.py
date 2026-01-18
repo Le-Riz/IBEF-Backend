@@ -5,7 +5,10 @@ from core.models.circular_buffer import DisplayDuration
 from core.event_hub import event_hub
 from core.services.sensor_manager import sensor_manager
 from core.services.test_manager import test_manager
+from core.sensor_reconnection import sensor_reconnection_manager
 from schemas import Point, PointsList, OffsetResponse
+
+VALID_SENSOR_VALUES = ", ".join([s.name for s in SensorId])
 
 router = APIRouter(prefix="/sensor", tags=["sensor"])
 
@@ -15,7 +18,15 @@ router = APIRouter(prefix="/sensor", tags=["sensor"])
         "description": "Invalid sensor_id provided.",
         "content": {
             "application/json": {
-                "example": {"detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"}
+                "example": {"detail": f"Invalid sensor_id: INVALID. Valid values are: {VALID_SENSOR_VALUES}"}
+            }
+        }
+    },
+    503: {
+        "description": "Sensor is not currently connected.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Sensor FORCE is not connected"}
             }
         }
     }
@@ -31,7 +42,14 @@ async def get_sensor_data(sensor_id: str) -> Point:
     except KeyError:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid sensor_id: {sensor_id}. Valid values are: {', '.join([s.name for s in SensorId])}"
+            detail=f"Invalid sensor_id: {sensor_id}. Valid values are: {VALID_SENSOR_VALUES}"
+        )
+
+    # Check sensor connection status
+    if not sensor_reconnection_manager.is_sensor_connected(sensor_id.upper()):
+        raise HTTPException(
+            status_code=503,
+            detail=f"Sensor {sensor_id.upper()} is not connected"
         )
 
     idx = sid.value
@@ -46,7 +64,7 @@ async def get_sensor_data(sensor_id: str) -> Point:
         "content": {
             "application/json": {
                 "examples": {
-                    "invalid_sensor": {"value": {"detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"}},
+                    "invalid_sensor": {"value": {"detail": f"Invalid sensor_id: INVALID. Valid values are: {VALID_SENSOR_VALUES}"}},
                     "invalid_window": {"value": {"detail": "Invalid window: 45. Allowed values are: [30, 60, 120, 300, 600]"}}
                 }
             }
@@ -57,6 +75,14 @@ async def get_sensor_data(sensor_id: str) -> Point:
         "content": {
             "application/json": {
                 "example": {"detail": "No test is currently running"}
+            }
+        }
+    },
+    503: {
+        "description": "Sensor is not currently connected.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Sensor FORCE is not connected"}
             }
         }
     }
@@ -73,7 +99,14 @@ async def get_sensor_data_history(sensor_id: str, window: int = 30) -> PointsLis
     except KeyError:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid sensor_id: {sensor_id}. Valid values are: {', '.join([s.name for s in SensorId])}"
+            detail=f"Invalid sensor_id: {sensor_id}. Valid values are: {VALID_SENSOR_VALUES}"
+        )
+
+    # Check sensor connection status
+    if not sensor_reconnection_manager.is_sensor_connected(sensor_id.upper()):
+        raise HTTPException(
+            status_code=503,
+            detail=f"Sensor {sensor_id.upper()} is not connected"
         )
 
     allowed_windows = {d.value_seconds() for d in DisplayDuration}
@@ -99,7 +132,15 @@ async def get_sensor_data_history(sensor_id: str, window: int = 30) -> PointsLis
         "description": "Invalid sensor_id provided.",
         "content": {
             "application/json": {
-                "example": {"detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"}
+                "example": {"detail": f"Invalid sensor_id: INVALID. Valid values are: {VALID_SENSOR_VALUES}"}
+            }
+        }
+    },
+    503: {
+        "description": "Sensor is not currently connected.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Sensor FORCE is not connected"}
             }
         }
     }
@@ -115,7 +156,14 @@ async def get_sensor_raw_data(sensor_id: str) -> Point:
     except KeyError:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid sensor_id: {sensor_id}. Valid values are: {', '.join([s.name for s in SensorId])}"
+            detail=f"Invalid sensor_id: {sensor_id}. Valid values are: {VALID_SENSOR_VALUES}"
+        )
+
+    # Check sensor connection status
+    if not sensor_reconnection_manager.is_sensor_connected(sensor_id.upper()):
+        raise HTTPException(
+            status_code=503,
+            detail=f"Sensor {sensor_id.upper()} is not connected"
         )
 
     idx = sid.value
@@ -131,7 +179,15 @@ async def get_sensor_raw_data(sensor_id: str) -> Point:
         "description": "Invalid sensor_id provided.",
         "content": {
             "application/json": {
-                "example": {"detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"}
+                "example": {"detail": f"Invalid sensor_id: INVALID. Valid values are: {VALID_SENSOR_VALUES}"}
+            }
+        }
+    },
+    503: {
+        "description": "Sensor is not currently connected.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Sensor FORCE is not connected"}
             }
         }
     }
@@ -146,7 +202,14 @@ async def get_sensor_zero_offset(sensor_id: str) -> OffsetResponse:
     except KeyError:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid sensor_id: {sensor_id}. Valid values are: {', '.join([s.name for s in SensorId])}"
+            detail=f"Invalid sensor_id: {sensor_id}. Valid values are: {VALID_SENSOR_VALUES}"
+        )
+
+    # Check sensor connection status
+    if not sensor_reconnection_manager.is_sensor_connected(sensor_id.upper()):
+        raise HTTPException(
+            status_code=503,
+            detail=f"Sensor {sensor_id.upper()} is not connected"
         )
 
     offset = sensor_manager.offsets[sensor.value]
@@ -158,7 +221,15 @@ async def get_sensor_zero_offset(sensor_id: str) -> OffsetResponse:
         "description": "Invalid sensor_id provided.",
         "content": {
             "application/json": {
-                "example": {"detail": "Invalid sensor_id: INVALID. Valid values are: FORCE, DISP_1, DISP_2, DISP_3"}
+                "example": {"detail": f"Invalid sensor_id: INVALID. Valid values are: {VALID_SENSOR_VALUES}"}
+            }
+        }
+    },
+    503: {
+        "description": "Sensor is not currently connected.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Sensor FORCE is not connected"}
             }
         }
     }
@@ -175,6 +246,13 @@ async def zero_sensor(sensor_id: str) -> None:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid sensor_id: {sensor_id}. Valid values are: {', '.join([s.name for s in SensorId])}"
+        )
+    
+    # Check sensor connection status
+    if not sensor_reconnection_manager.is_sensor_connected(sensor_id.upper()):
+        raise HTTPException(
+            status_code=503,
+            detail=f"Sensor {sensor_id.upper()} is not connected"
         )
     
     # Send command to sensor manager via event hub

@@ -36,13 +36,15 @@ class TestManager:
     def __init__(self):
         self.current_test: Optional[TestMetaData] = None
         self.is_running = False
+        self.is_stopped = False  # Test has been stopped but not yet finalized
         self.test_history: List[TestMetaData] = []
         
         # Sensor data storage using efficient circular buffers
         # Indexed by SensorId.value for O(1) access
         # Point spacing is determined by DataProcessor publishing rate (PROCESSING_RATE),
         # not raw sensor frequency. If raw > processing rate, effective freq = processing rate.
-        effective_freq = min(PROCESSING_RATE, SENSOR_SAMPLING_FREQ)  # Frames delivered at this rate, so spacing is based on this
+        # Align buffer sampling with the processor publish rate to avoid underestimating window span
+        effective_freq = PROCESSING_RATE
         self.data_storage = SensorDataStorage(len(list(SensorId)), effective_freq)
         
         self.start_time = 0.0
@@ -81,16 +83,21 @@ class TestManager:
     def reload_history(self):
         """Scans the disk for existing tests."""
         self.test_history = []
-        logger.warning(f"[RELOAD] Scanning {TEST_DATA_DIR}")
+        logger.info(f"[RELOAD] Scanning {TEST_DATA_DIR}")
         
         if not os.path.exists(TEST_DATA_DIR):
-            logger.warning(f"[RELOAD] Directory does not exist: {TEST_DATA_DIR}")
+            logger.info(f"[RELOAD] Directory does not exist: {TEST_DATA_DIR}")
             return
 
         items = os.listdir(TEST_DATA_DIR)
-        logger.warning(f"[RELOAD] Found {len(items)} items in directory")
+        logger.info(f"[RELOAD] Found {len(items)} items in directory")
         
         for dirname in items:
+            # Do not surface the in-flight test (prepared/running/stopped) in history
+            if self.current_test and dirname == self.current_test.test_id:
+                logger.debug(f"[RELOAD] Skipping current in-progress test {dirname} from history")
+                continue
+
             dirpath = os.path.join(TEST_DATA_DIR, dirname)
             if os.path.isdir(dirpath):
                 meta_path = os.path.join(dirpath, "metadata.json")
@@ -103,13 +110,13 @@ class TestManager:
                             # Identify the real ID used as foldername if different
                             meta.test_id = dirname 
                             self.test_history.append(meta)
-                            logger.warning(f"[RELOAD] Loaded test {dirname}")
+                            logger.debug(f"[RELOAD] Loaded test {dirname}")
                     except Exception as e:
                         logger.error(f"Failed to load test {dirname}: {e}")
         
         # Sort by date (desc)
         self.test_history.sort(key=lambda x: x.date, reverse=True)
-        logger.warning(f"[RELOAD] Finished loading {len(self.test_history)} tests")
+        logger.info(f"[RELOAD] Finished loading {len(self.test_history)} tests")
         event_hub.send_all_on_topic("history_updated", None)
 
     def get_test_state(self) -> TestState:
@@ -120,9 +127,12 @@ class TestManager:
             TestState.NOTHING: No test running and no test prepared
             TestState.PREPARED: No test running but metadata has been set
             TestState.RUNNING: A test is currently running
+            TestState.STOPPED: A test has been stopped but not yet finalized
         """
         if self.is_running:
             return TestState.RUNNING
+        elif self.is_stopped:
+            return TestState.STOPPED
         elif self.current_test is not None:
             return TestState.PREPARED
         else:
@@ -207,47 +217,68 @@ class TestManager:
         event_hub.send_all_on_topic("test_state_changed", True)
 
     def stop_test(self):
+        """Stop recording data but keep test in memory for review/finalization."""
         if self.current_test is None:
             return
 
-        logger.info(f"Test stopped/cancelled: {self.current_test.test_id}")
+        if not self.is_running:
+            return  # Already stopped or not running
+
+        logger.info(f"Test stopped (recording ended): {self.current_test.test_id}")
         
-        # Close files if running
-        if self.is_running:
-            if self.raw_file:
-                self.raw_file.close()
-                self.raw_file = None
-            if self.csv_file:
-                self.csv_file.close()
-                self.csv_file = None
-            if self.raw_csv_file:
-                self.raw_csv_file.close()
-                self.raw_csv_file = None
-                self.csv_writer = None
-            
-            # Save graphiques to test directory before cleanup
-            self._save_graphiques()
-            
-            # Clean up PIL images
-            self.graphique_disp1_image = None
-            self.graphique_disp1_draw = None
-            self.graphique_disp1_last_point = None
-            self.graphique_arc_image = None
-            self.graphique_arc_draw = None
-            self.graphique_arc_last_point = None
-            
-            self.reload_history() # Refresh list
-            self.is_running = False
+        # Close files to stop recording
+        if self.raw_file:
+            self.raw_file.close()
+            self.raw_file = None
+        if self.csv_file:
+            self.csv_file.close()
+            self.csv_file = None
+        if self.raw_csv_file:
+            self.raw_csv_file.close()
+            self.raw_csv_file = None
+            self.csv_writer = None
         
-        # Clear data storage for next test
+        # Save graphiques to test directory
+        self._save_graphiques()
+        
+        # Mark as stopped but keep in memory
+        self.is_running = False
+        self.is_stopped = True
+        
+        temp_test = self.current_test
+        event_hub.send_all_on_topic("test_stopped", temp_test)
+        event_hub.send_all_on_topic("test_state_changed", False)
+
+    def finalize_test(self):
+        """Move stopped test to history and clear current test."""
+        if self.current_test is None:
+            raise ValueError("No test to finalize.")
+        
+        if not self.is_stopped:
+            raise RuntimeError("Test is not stopped. Call PUT /stop first.")
+        
+        logger.info(f"Test finalized: {self.current_test.test_id}")
+        
+        # Clean up PIL images
+        self.graphique_disp1_image = None
+        self.graphique_disp1_draw = None
+        self.graphique_disp1_last_point = None
+        self.graphique_arc_image = None
+        self.graphique_arc_draw = None
+        self.graphique_arc_last_point = None
+        
+        # Clear data storage
         self.data_storage.clear_all()
         
         temp_test = self.current_test
         self.current_test = None
         self.current_test_dir = None
+        self.is_stopped = False
         
-        event_hub.send_all_on_topic("test_stopped", temp_test)
-        event_hub.send_all_on_topic("test_state_changed", False)
+        # Reload history now that the test is finalized and cleared from memory
+        self.reload_history()
+        
+        event_hub.send_all_on_topic("test_finalized", temp_test)
 
     def archive_test(self, test_id: str):
         """Moves a test folder to the archive directory."""
@@ -354,9 +385,9 @@ class TestManager:
 
     def get_history(self) -> List[TestMetaData]:
         """Get list of all test histories, reloaded from disk."""
-        logger.warning("[GET_HISTORY] Called - reloading from disk")
+        logger.debug("[GET_HISTORY] Called - reloading from disk")
         self.reload_history()
-        logger.warning(f"[GET_HISTORY] Returning {len(self.test_history)} tests")
+        logger.debug(f"[GET_HISTORY] Returning {len(self.test_history)} tests")
         return self.test_history
 
     def get_relative_time(self) -> float:

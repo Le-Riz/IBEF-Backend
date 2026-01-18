@@ -4,7 +4,7 @@ IBEF Backend is a FastAPI service for real-time sensor data acquisition, process
 
 ## Features
 
-- **Real-time data acquisition** — 10 Hz processing rate with 4 sensors (FORCE, DISP_1, DISP_2, DISP_3)
+- **Real-time data acquisition** — 20 Hz processing rate with 6 sensors (FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5)
 - **Optimized storage** — Circular buffers with O(1) insertion and retrieval
 - **Fixed-point history** — Exactly 300 points per window (30s, 60s, 2m, 5m, 10m) with uniform spacing
 - **Test management** — Start, stop, archive, and delete test sessions
@@ -48,4 +48,8 @@ Then open http://localhost:8000/docs for the interactive API documentation (or h
 
 - **[API Reference (Interactive)](api-reference.md)** — Full OpenAPI documentation with ReDoc
 - **[API Overview](api.md)** — Quick reference and examples
+- **[Sensor Connection Management](sensor-connection-management.md)** — Connection states, reconnection strategy, error handling
+- **[Sensor Configuration](sensor-config.md)** — Sensor setup and calibration
+- **[Auto-Detection](auto-sensor-detection.md)** — Automatic port detection
+- **[ARC Sensor](arc-sensor.md)** — ARC calculation and usage
 - **[Developer Guide](dev.md)** — Architecture, performance, and contribution guidelines
