@@ -72,6 +72,9 @@ class TestManager:
         os.makedirs(TEST_DATA_DIR, exist_ok=True)
         os.makedirs(ARCHIVE_DIR, exist_ok=True)
 
+        # Emulation clock (used when no test is running)
+        self.emulation_start_time: float | None = None
+
         # Load history
         self.reload_history()
 
@@ -208,6 +211,8 @@ class TestManager:
         self._draw_graphique_axes('ARC')
         
         self.is_running = True
+        # Reset emulation clock when a real/recorded test starts
+        self.emulation_start_time = None
         # Clear data storage for new test
         self.data_storage.clear_all()
         self.start_time = datetime.datetime.now().timestamp()
@@ -274,6 +279,9 @@ class TestManager:
         self.current_test = None
         self.current_test_dir = None
         self.is_stopped = False
+
+        # Reset emulation clock to allow live time in simulation mode
+        self.emulation_start_time = None
         
         # Reload history now that the test is finalized and cleared from memory
         self.reload_history()
@@ -395,6 +403,18 @@ class TestManager:
         """Get current time relative to test start, or 0.0 if no test is running."""
         if self.is_running and self.start_time > 0:
             return time.time() - self.start_time
+
+        # In simulation mode (no test running), expose a monotonic clock so time does not stay at 0
+        try:
+            from core.services.sensor_manager import sensor_manager
+        except Exception:
+            sensor_manager = None
+
+        if sensor_manager and sensor_manager.emulation_mode:
+            if self.emulation_start_time is None:
+                self.emulation_start_time = time.time()
+            return time.time() - self.emulation_start_time
+
         return 0.0
 
     def _draw_graphique_axes(self, sensor_name: str):
