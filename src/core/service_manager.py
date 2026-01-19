@@ -44,19 +44,36 @@ class ServiceManager:
             for sensor_name, sensor_config in config_loader.get_all_sensors().items():
                 sensor_bauds[sensor_name] = sensor_config.get("baud", 9600)
             
-            # Setup health monitoring for reconnections
-            for sensor_name in sensor_bauds.keys():
-                sensor_reconnection_manager.add_sensor(sensor_name, max_silence_time=5.0)
+            # Store detected sensor info for reconnection (baud may differ from config)
+            detected_sensor_info = {}  # sensor_name -> (port, baud)
+            missing_sensors_state = {}  # Track which sensors were missing (for state change logging)
+            reconnection_failure_state = {}  # Track failed reconnection attempts (for state change logging)
             
             # Register reconnection callback
             async def reconnect_sensor(sensor_name: str) -> bool:
                 """Attempt to reconnect a specific sensor."""
                 logger.info(f"Attempting to reconnect {sensor_name}...")
-                detected = port_detector.auto_detect_sensors({sensor_name: sensor_bauds[sensor_name]})
+                
+                # Use detected baud if available, otherwise use configured baud
+                baud_to_use = sensor_bauds[sensor_name]
+                if sensor_name in detected_sensor_info:
+                    old_port, detected_baud = detected_sensor_info[sensor_name]
+                    baud_to_use = detected_baud
+                else:
+                    old_port = None
+                
+                # Try to detect the sensor
+                detected = port_detector.auto_detect_sensors(
+                    {sensor_name: baud_to_use},
+                    sensor_configs=config_loader.get_all_sensors(),
+                    verbose=False
+                )
                 
                 if sensor_name in detected:
                     sensor_info = detected[sensor_name]
                     logger.info(f"✓ Re-detected {sensor_name} on {sensor_info.port} @ {sensor_info.baud} baud")
+                    detected_sensor_info[sensor_name] = (sensor_info.port, sensor_info.baud)
+                    reconnection_failure_state[sensor_name] = False  # Clear failure state
                     
                     # Start serial reader for the reconnected sensor
                     task = loop.create_task(serial_reader(
@@ -70,11 +87,99 @@ class ServiceManager:
                     self.sensor_tasks_map[sensor_name] = task
                     return True
                 else:
-                    logger.warning(f"✗ Could not re-detect {sensor_name}")
+                    # Only log warning on first failure, not on every retry
+                    was_failing = reconnection_failure_state.get(sensor_name, False)
+                    if not was_failing:
+                        logger.warning(f"✗ Could not re-detect {sensor_name}")
+                        reconnection_failure_state[sensor_name] = True
+                    
+                    # Remove old port from used_ports if the sensor was assigned to one
+                    # This allows the port to be reassigned to another sensor
+                    if old_port and old_port in port_detector.used_ports:
+                        port_detector.used_ports.discard(old_port)
+                        logger.debug(f"Released port {old_port} from {sensor_name} for reuse")
                     return False
             
-            for sensor_name in sensor_bauds.keys():
-                sensor_reconnection_manager.register_reconnection_callback(sensor_name, reconnect_sensor)
+            # Periodic detection of missing sensors
+            async def periodic_sensor_detection():
+                """Periodically attempt to detect missing sensors with increasing wait times."""
+                wait_time = 1  # Start with 1 second
+                max_wait_time = 10
+                last_detected_sensor = None  # Track last detected sensor to prioritize next detection
+                
+                while self.running:
+                    try:
+                        await asyncio.sleep(wait_time)
+                        
+                        # Find missing sensors
+                        missing = set(sensor_bauds.keys()) - set(detected_sensor_info.keys())
+                        
+                        if missing:
+                            # Try to detect ONE missing sensor at a time (not all at once)
+                            # Prioritize the one after the last detected one (round-robin)
+                            missing_list = sorted(missing)  # Sort for deterministic order
+                            
+                            # Find the next sensor to probe (after the last one we detected)
+                            if last_detected_sensor:
+                                try:
+                                    idx = missing_list.index(last_detected_sensor) + 1
+                                    if idx >= len(missing_list):
+                                        idx = 0
+                                except ValueError:
+                                    idx = 0
+                            else:
+                                idx = 0
+                            
+                            sensor_to_detect = missing_list[idx]
+                            last_detected_sensor = sensor_to_detect
+                            
+                            # Try to detect just this one sensor
+                            newly_detected = port_detector.auto_detect_sensors(
+                                {sensor_to_detect: sensor_bauds[sensor_to_detect]},
+                                sensor_configs=config_loader.get_all_sensors(),
+                                verbose=False
+                            )
+                            
+                            if sensor_to_detect in newly_detected:
+                                sensor_info = newly_detected[sensor_to_detect]
+                                detected_sensor_info[sensor_to_detect] = (sensor_info.port, sensor_info.baud)
+                                
+                                # Log state change
+                                logger.info(f"✓ Detected missing sensor {sensor_to_detect} on {sensor_info.port} @ {sensor_info.baud} baud")
+                                missing_sensors_state[sensor_to_detect] = False
+                                
+                                # Add to health monitoring
+                                sensor_reconnection_manager.add_sensor(sensor_to_detect, max_silence_time=5.0)
+                                
+                                # Register reconnection callback
+                                sensor_reconnection_manager.register_reconnection_callback(sensor_to_detect, reconnect_sensor)
+                                
+                                # Start serial reader
+                                task = loop.create_task(serial_reader(
+                                    port=sensor_info.port,
+                                    baudrate=sensor_info.baud,
+                                    sensor_name=sensor_to_detect
+                                ))
+                                if not hasattr(self, 'sensor_tasks_map'):
+                                    self.sensor_tasks_map = {}
+                                self.sensor_tasks_map[sensor_to_detect] = task
+                                
+                                # Reset wait time when a sensor is detected
+                                wait_time = 1
+                            else:
+                                # Sensor not detected, it may not be connected yet
+                                was_missing = missing_sensors_state.get(sensor_to_detect, True)
+                                if not was_missing:
+                                    logger.warning(f"✗ Lost sensor {sensor_to_detect} (not detected)")
+                                    missing_sensors_state[sensor_to_detect] = True
+                                    wait_time = 1
+                        else:
+                            # No missing sensors, can increase wait time
+                            if wait_time < max_wait_time:
+                                wait_time = min(wait_time + 1, max_wait_time)
+                    
+                    except Exception as e:
+                        logger.debug(f"Error during periodic sensor detection: {e}")
             
             # Start health monitoring
             monitor_task = loop.create_task(sensor_reconnection_manager.start_monitoring())
@@ -82,10 +187,17 @@ class ServiceManager:
             
             # Auto-detect sensors initially
             logger.info("Detecting connected sensors...")
-            detected_sensors = port_detector.auto_detect_sensors(sensor_bauds)
+            detected_sensors = port_detector.auto_detect_sensors(
+                sensor_bauds,
+                sensor_configs=config_loader.get_all_sensors()
+            )
+            
+            # Track initial missing sensors
+            for sensor_name in sensor_bauds.keys():
+                missing_sensors_state[sensor_name] = sensor_name not in detected_sensors
             
             if not detected_sensors:
-                logger.warning("No sensors detected. Check connections and baud rates.")
+                logger.warning("No sensors detected initially. Waiting for connections...")
             else:
                 # Start serial readers for all detected sensors
                 self.serial_tasks = []
@@ -94,6 +206,14 @@ class ServiceManager:
                 
                 for sensor_name, sensor_info in detected_sensors.items():
                     logger.info(f"Starting serial reader for {sensor_name}: {sensor_info.port} @ {sensor_info.baud} baud")
+                    detected_sensor_info[sensor_name] = (sensor_info.port, sensor_info.baud)
+                    
+                    # Add to health monitoring only if detected
+                    sensor_reconnection_manager.add_sensor(sensor_name, max_silence_time=5.0)
+                    
+                    # Register reconnection callback
+                    sensor_reconnection_manager.register_reconnection_callback(sensor_name, reconnect_sensor)
+                    
                     task = loop.create_task(serial_reader(
                         port=sensor_info.port,
                         baudrate=sensor_info.baud,
@@ -101,6 +221,11 @@ class ServiceManager:
                     ))
                     self.serial_tasks.append(task)
                     self.sensor_tasks_map[sensor_name] = task
+            
+            # Start periodic sensor detection task
+            self.running = True
+            detection_task = loop.create_task(periodic_sensor_detection())
+            self.detection_task = detection_task
         
         # Test Manager
         # Already initialized as singleton
@@ -110,10 +235,15 @@ class ServiceManager:
     def stop_services(self):
         """Stop background services."""
             
+        self.running = False
+        
         sensor_manager.stop()
         
         # Stop health monitoring
         asyncio.create_task(sensor_reconnection_manager.stop_monitoring())
+        
+        if hasattr(self, 'detection_task'):
+            self.detection_task.cancel()
         
         if hasattr(self, 'serial_tasks'):
             for task in self.serial_tasks:

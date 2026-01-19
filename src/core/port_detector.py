@@ -35,6 +35,7 @@ class PortDetector:
         self._initialized = True
         self.detected_sensors: Dict[str, DetectedSensor] = {}
         self.port_to_sensor: Dict[str, str] = {}  # Maps port to sensor_name
+        self.used_ports: set = set()  # Persistent list of ports that have been assigned
         self._detection_lock = threading.Lock()
     
     @staticmethod
@@ -45,24 +46,30 @@ class PortDetector:
             ports.append(port_info.device)
         return ports
     
-    def probe_sensor(self, port: str, baud: int, timeout: float = 1.0) -> Optional[str]:
+    def probe_sensor(self, port: str, baud: int, expected_sender_id: Optional[str] = None, timeout: float = 3.0) -> Optional[str]:
         """
         Probe a single port at a given baud rate to identify the sensor type.
+        
+        Args:
+            port: Serial port to probe
+            baud: Baud rate to use
+            expected_sender_id: For DISP sensors, validate that the sender_id matches (e.g., "0x2E01")
+            timeout: Timeout for reading
         
         Returns:
             Sensor name (FORCE, DISP_1, etc.) or None if unrecognized
         """
         try:
             ser = serial.Serial(port, baud, timeout=timeout)
-            time.sleep(0.5)  # Wait for connection to stabilize
+            time.sleep(1.0)  # Wait for connection to stabilize
             
             sensor_detected = None
-            for _ in range(10):  # Try to read up to 10 lines
+            for _ in range(30):  # Try to read up to 30 lines (3 seconds total)
                 if ser.in_waiting > 0:
                     try:
                         line = ser.readline().decode('utf-8').strip()
                         if line:
-                            sensor_detected = self._identify_sensor_from_line(line)
+                            sensor_detected = self._identify_sensor_from_line(line, expected_sender_id)
                             if sensor_detected:
                                 break
                     except (UnicodeDecodeError, AttributeError):
@@ -81,9 +88,13 @@ class PortDetector:
             return None
     
     @staticmethod
-    def _identify_sensor_from_line(line: str) -> Optional[str]:
+    def _identify_sensor_from_line(line: str, expected_sender_id: Optional[str] = None) -> Optional[str]:
         """
         Identify sensor type from a single line of serial data.
+        
+        Args:
+            line: Serial data line
+            expected_sender_id: For DISP sensors, validate sender_id matches (e.g., "0x2E01")
         
         Returns:
             Sensor name or None if unrecognized
@@ -101,40 +112,70 @@ class PortDetector:
         
         # Motion sensor pattern: "SPC_VAL" with "usSenderId" and "Val="
         if "SPC_VAL" in line and "usSenderId" in line and "Val=" in line:
-            return "DISP"  # Generic DISP (will be numbered based on order)
+            # If we're looking for a specific sender_id, validate it
+            if expected_sender_id:
+                try:
+                    # Extract sender_id from line
+                    for part in line.split():
+                        if part.startswith("usSenderId="):
+                            actual_sender_id = part.split("=")[1]
+                            if actual_sender_id == expected_sender_id:
+                                return "DISP"
+                            else:
+                                # Wrong sender_id, not the sensor we're looking for
+                                return None
+                except (IndexError, ValueError):
+                    pass
+            else:
+                # No specific sender_id expected, just detect as DISP
+                return "DISP"
         
         return None
     
-    def auto_detect_sensors(self, sensor_bauds: Dict[str, int]) -> Dict[str, DetectedSensor]:
+    def auto_detect_sensors(self, sensor_bauds: Dict[str, int], sensor_configs: Dict[str, Dict] = None, verbose: bool = True) -> Dict[str, DetectedSensor]:
         """
         Automatically detect all sensors connected to the system.
         
         Args:
             sensor_bauds: Mapping of sensor name to expected baud rate
                          e.g., {"FORCE": 115200, "DISP_1": 9600, ...}
+            sensor_configs: Optional sensor configurations with sender_id info
+            verbose: Whether to log info/warning messages (default True)
         
         Returns:
-            Dictionary mapping sensor_name to DetectedSensor
+            Dictionary mapping sensor_name to DetectedSensor (only those physically connected)
         """
-        logger.info("Starting automatic sensor detection...")
+        if verbose:
+            logger.info("Starting automatic sensor detection...")
         available_ports = self.get_available_ports()
-        logger.info(f"Found {len(available_ports)} available ports: {available_ports}")
+        if verbose:
+            logger.info(f"Found {len(available_ports)} available ports: {available_ports}")
         
         detected = {}
-        used_ports = set()
+        local_used_ports = set(self.used_ports)  # Copy persistent used_ports
         disp_count = 0  # Counter for DISP sensors found
+        max_disp = max(0, sum(1 for name in sensor_bauds if name.startswith("DISP")))
         
-        # First pass: try each port with each sensor's expected baud
+        # Single pass: try each port with each sensor's configured baud only
         for port in available_ports:
+            if port in local_used_ports:
+                continue
+            
             for sensor_name, baud in sensor_bauds.items():
-                if port in used_ports:
-                    continue
-                
                 # Skip DISP sensors we've already found enough of
-                if sensor_name.startswith("DISP") and disp_count >= 3:
+                if sensor_name.startswith("DISP") and max_disp and disp_count >= max_disp:
                     continue
                 
-                sensor_type = self.probe_sensor(port, baud)
+                # Skip if this sensor is already detected
+                if sensor_name in detected:
+                    continue
+                
+                # Get expected sender_id for DISP sensors from config
+                expected_sender_id = None
+                if sensor_name.startswith("DISP") and sensor_configs and sensor_name in sensor_configs:
+                    expected_sender_id = sensor_configs[sensor_name].get("sender_id")
+                
+                sensor_type = self.probe_sensor(port, baud, expected_sender_id=expected_sender_id)
                 
                 if sensor_type == "FORCE" and sensor_name == "FORCE":
                     detected[sensor_name] = DetectedSensor(
@@ -143,8 +184,9 @@ class PortDetector:
                         baud=baud,
                         confidence=0.95
                     )
-                    used_ports.add(port)
-                    logger.info(f"✓ Detected {sensor_name} on {port} @ {baud} baud")
+                    local_used_ports.add(port)
+                    if verbose:
+                        logger.info(f"✓ Detected {sensor_name} on {port} @ {baud} baud")
                     break
                 
                 elif sensor_type == "DISP" and sensor_name.startswith("DISP"):
@@ -154,56 +196,27 @@ class PortDetector:
                         baud=baud,
                         confidence=0.90
                     )
-                    used_ports.add(port)
+                    local_used_ports.add(port)
                     disp_count += 1
-                    logger.info(f"✓ Detected {sensor_name} on {port} @ {baud} baud")
+                    if verbose:
+                        logger.info(f"✓ Detected {sensor_name} on {port} @ {baud} baud")
                     break
         
-        # Second pass: try alternative bauds for undetected ports
-        if len(detected) < len(sensor_bauds):
-            alternative_bauds = [4800, 9600, 19200, 38400, 57600, 115200]
-            
-            for port in available_ports:
-                if port in used_ports:
-                    continue
-                
-                logger.info(f"Port {port} undetected with standard bauds, trying alternatives...")
-                
-                for alt_baud in alternative_bauds:
-                    sensor_type = self.probe_sensor(port, alt_baud)
-                    
-                    if sensor_type == "FORCE" and "FORCE" not in detected:
-                        detected["FORCE"] = DetectedSensor(
-                            sensor_name="FORCE",
-                            port=port,
-                            baud=alt_baud,
-                            confidence=0.7  # Lower confidence for alternative baud
-                        )
-                        used_ports.add(port)
-                        logger.warning(f"⚠ Detected FORCE on {port} @ {alt_baud} baud (expected 115200)")
-                        break
-                    
-                    elif sensor_type == "DISP" and disp_count < 3:
-                        disp_num = disp_count + 1
-                        disp_name = f"DISP_{disp_num}"
-                        detected[disp_name] = DetectedSensor(
-                            sensor_name=disp_name,
-                            port=port,
-                            baud=alt_baud,
-                            confidence=0.7
-                        )
-                        used_ports.add(port)
-                        disp_count += 1
-                        logger.warning(f"⚠ Detected {disp_name} on {port} @ {alt_baud} baud (expected 9600)")
-                        break
-        
-        # Store results
+        # Update persistent state
         self.detected_sensors = detected
         self.port_to_sensor = {s.port: s.sensor_name for s in detected.values()}
+        self.used_ports = local_used_ports  # Save used ports persistently
         
-        logger.info(f"Sensor detection complete. Found {len(detected)} sensors:")
-        for sensor_name, sensor in detected.items():
-            logger.info(f"  - {sensor_name}: {sensor.port} @ {sensor.baud} baud (confidence: {sensor.confidence:.0%})")
+        if verbose:
+            logger.info(f"Sensor detection complete. Found {len(detected)} sensors:")
+            for sensor_name, sensor in detected.items():
+                logger.info(f"  - {sensor_name}: {sensor.port} @ {sensor.baud} baud (confidence: {sensor.confidence:.0%})")
+        
+        # Warn about missing sensors (only if verbose)
+        missing_sensors = set(sensor_bauds.keys()) - set(detected.keys())
+        if missing_sensors and verbose:
+            missing_list = ", ".join(sorted(missing_sensors))
+            logger.warning(f"The following configured sensors were not detected (they may not be connected): {missing_list}")
         
         return detected
     

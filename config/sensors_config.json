@@ -1,5 +1,5 @@
 {
-  "emulation": true,
+  "emulation": false,
   "sensors": {
     "FORCE": {
       "baud": 115200,
@@ -7,23 +7,28 @@
     },
     "DISP_1": {
       "baud": 9600,
-      "description": "Motion sensor 1 (capteur de mouvement 1)"
+      "description": "Motion sensor 1 (capteur de mouvement 1)",
+      "sender_id": "0x2E01"
     },
     "DISP_2": {
       "baud": 9600,
-      "description": "Motion sensor 2 (capteur de mouvement 2)"
+      "description": "Motion sensor 2 (capteur de mouvement 2)",
+      "sender_id": "0x2E02"
     },
     "DISP_3": {
       "baud": 9600,
-      "description": "Motion sensor 3 (capteur de mouvement 3)"
+      "description": "Motion sensor 3 (capteur de mouvement 3)",
+      "sender_id": "0x2E03"
     },
     "DISP_4": {
       "baud": 9600,
-      "description": "Motion sensor 4 (capteur de mouvement 4)"
+      "description": "Motion sensor 4 (capteur de mouvement 4)",
+      "sender_id": "0x2E04"
     },
     "DISP_5": {
       "baud": 9600,
-      "description": "Motion sensor 5 (capteur de mouvement 5)"
+      "description": "Motion sensor 5 (capteur de mouvement 5)",
+      "sender_id": "0x2E05"
     }
   }
 }

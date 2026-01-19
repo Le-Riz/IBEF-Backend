@@ -5,6 +5,7 @@ import math
 import random
 from typing import Dict, Optional
 
+from core.config_loader import config_loader
 from core.models.sensor_data import SensorData
 from core.models.sensor_enum import SensorId
 from core.event_hub import event_hub
@@ -25,6 +26,9 @@ class SensorManager:
         self.motion_sensor_map: Dict[str, SensorId] = {}
         # Store offsets: List indexed by SensorId.value
         self.offsets: list[float] = [0.0 for _ in SensorId]
+
+        # Preload mappings from configuration if present
+        self._load_motion_sensor_mapping()
         
         # Subscribe to serial data from the global handler
         # Note: The handler signature for PubSubHub is (topic, message)
@@ -116,23 +120,48 @@ class SensorManager:
                     pass
         
         if sender_id and val is not None:
-            # Map sender_id to DISP_X
-            if sender_id not in self.motion_sensor_map:
-                # Assign next available DISP (up to DISP_5)
-                count = len(self.motion_sensor_map)
-                disp_order = [
-                    SensorId.DISP_1,
-                    SensorId.DISP_2,
-                    SensorId.DISP_3,
-                    SensorId.DISP_4,
-                    SensorId.DISP_5,
-                ]
-                if count < len(disp_order):
-                    self.motion_sensor_map[sender_id] = disp_order[count]
-            
             sensor_id = self.motion_sensor_map.get(sender_id)
+
+            # If not configured, assign dynamically to next available DISP
+            if sensor_id is None:
+                sensor_id = self._assign_motion_sensor(sender_id)
+                if sensor_id:
+                    logger.info(f"Assigned motion sender {sender_id} to {sensor_id.name}")
+
             if sensor_id:
                 self._notify(sensor_id, val)
+
+    def _load_motion_sensor_mapping(self):
+        """Load pre-defined motion sensor mappings from config."""
+        sensors_config = config_loader.get_all_sensors()
+        for name, sensor_config in sensors_config.items():
+            if not name.startswith("DISP"):
+                continue
+            sender_id = sensor_config.get("sender_id")
+            if not sender_id:
+                continue
+            try:
+                sensor_id = SensorId[name]
+            except KeyError:
+                continue
+            self.motion_sensor_map[sender_id] = sensor_id
+        if self.motion_sensor_map:
+            logger.info(f"Loaded {len(self.motion_sensor_map)} motion sensor mappings from config")
+
+    def _assign_motion_sensor(self, sender_id: str) -> Optional[SensorId]:
+        """Assign sender_id to next available DISP sensor when not in config."""
+        disp_order = [
+            SensorId.DISP_1,
+            SensorId.DISP_2,
+            SensorId.DISP_3,
+            SensorId.DISP_4,
+            SensorId.DISP_5,
+        ]
+        for disp_sensor in disp_order:
+            if disp_sensor not in self.motion_sensor_map.values():
+                self.motion_sensor_map[sender_id] = disp_sensor
+                return disp_sensor
+        return None
 
     def _emulate_data(self, start_time):
         elapsed = time.time() - start_time
@@ -141,13 +170,26 @@ class SensorManager:
         force_val = 500 + 500 * math.sin(elapsed) + random.uniform(-10, 10)
         self._notify(SensorId.FORCE, force_val)
 
-        # Emulate Displacement (Linear + Noise)
-        disp_val = (elapsed * 0.1) % 10 + random.uniform(-0.05, 0.05)
-        self._notify(SensorId.DISP_1, disp_val)
-        self._notify(SensorId.DISP_2, disp_val * 1.1)
-        self._notify(SensorId.DISP_3, disp_val * 0.9)
-        self._notify(SensorId.DISP_4, disp_val * 1.05)
-        self._notify(SensorId.DISP_5, disp_val * 0.95)
+        # Emulate Displacement (Linear + Noise) with per-sensor phase offsets to avoid overlap
+        phase_offsets = {
+            SensorId.DISP_1: 0.0,
+            SensorId.DISP_2: 1.5,
+            SensorId.DISP_3: 3.0,
+            SensorId.DISP_4: 4.5,
+            SensorId.DISP_5: 6.0,
+        }
+
+        for sensor_id, phase in phase_offsets.items():
+            disp_val = ((elapsed + phase) * 0.1) % 10 + random.uniform(-0.05, 0.05)
+            # Slight scale differences per sensor for diversity
+            scale = {
+                SensorId.DISP_1: 1.00,
+                SensorId.DISP_2: 1.05,
+                SensorId.DISP_3: 0.95,
+                SensorId.DISP_4: 1.02,
+                SensorId.DISP_5: 0.98,
+            }[sensor_id]
+            self._notify(sensor_id, disp_val * scale)
 
     def _notify(self, sensor_id: SensorId, value: float):
         # Apply offset

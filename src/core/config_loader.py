@@ -59,7 +59,7 @@ class ConfigLoader:
             "emulation": True,
             "sensors": {
                 "FORCE": {"baud": 115200, "port": "/dev/ttyUSB0", "enabled": True},
-                "DISP_1": {"baud": 9600, "port": "/dev/ttyUSB1", "enabled": True},
+                "DISP_1": {"baud": 9600, "port": "/dev/ttyUSB1", "enabled": True, "sender_id": "0x2E01"},
                 "DISP_2": {"baud": 9600, "port": "/dev/ttyUSB2", "enabled": False},
                 "DISP_3": {"baud": 9600, "port": "/dev/ttyUSB3", "enabled": False},
                 "DISP_4": {"baud": 9600, "port": "/dev/ttyUSB4", "enabled": False},

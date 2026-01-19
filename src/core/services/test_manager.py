@@ -379,8 +379,9 @@ class TestManager:
 
     def get_sensor_history(self, sensor_id: SensorId, window_seconds: int):
         """Return recent data for a sensor over the requested window (seconds)."""
-        if not self.is_running:
-            raise RuntimeError("No test is currently running")
+        # Allow history access while a test is stopped but not yet finalized
+        if not (self.is_running or self.is_stopped):
+            raise RuntimeError("No test is currently running or stopped")
         return self.data_storage.get_data_for_window_seconds(sensor_id.value, window_seconds)
 
     def get_history(self) -> List[TestMetaData]:
