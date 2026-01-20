@@ -22,7 +22,7 @@ class TestGraphique:
         image_data = io.BytesIO(response.content)
         image = Image.open(image_data)
         assert image.format == "PNG"
-        assert image.size == (1000, 700)  # Check default dimensions
+        assert image.size == (1000, 1000)  # Check default dimensions
 
     def test_graphique_arc_returns_png(self):
         """Test that /api/graph/ARC returns a valid PNG."""
@@ -34,7 +34,7 @@ class TestGraphique:
         image_data = io.BytesIO(response.content)
         image = Image.open(image_data)
         assert image.format == "PNG"
-        assert image.size == (1000, 700)
+        assert image.size == (1000, 1000)
 
     def test_graphique_invalid_sensor(self):
         """Test that invalid sensor name returns 400."""
@@ -68,6 +68,7 @@ class TestGraphique:
             "loading_mode": "compression",
             "sensor_spacing": 10.0,
             "ext_support_spacing": 20.0,
+            "ext_sensor_spacing": 20.0,
             "load_point_spacing": 15.0
         }
         
@@ -96,7 +97,7 @@ class TestGraphique:
         image = Image.open(image_data)
         
         assert image.width == 1000
-        assert image.height == 700
+        assert image.height == 1000
 
     def test_graphique_has_content_disposition(self):
         """Test that graphique response has proper Content-Disposition header."""
@@ -126,7 +127,7 @@ class TestGraphique:
         image_data = io.BytesIO(png_data)
         image = Image.open(image_data)
         assert image.format == "PNG"
-        assert image.size == (1000, 700)
+        assert image.size == (1000, 1000)
 
     def test_graphique_base64_endpoint_arc(self):
         """Test that /api/graph/ARC/base64 returns base64-encoded PNG."""
@@ -146,7 +147,7 @@ class TestGraphique:
         image_data = io.BytesIO(png_data)
         image = Image.open(image_data)
         assert image.format == "PNG"
-        assert image.size == (1000, 700)
+        assert image.size == (1000, 1000)
 
 
 if __name__ == "__main__":

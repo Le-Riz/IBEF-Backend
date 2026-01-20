@@ -17,6 +17,7 @@ def test_test_start_endpoint() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     # First prepare the test

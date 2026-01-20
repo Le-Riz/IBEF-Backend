@@ -43,6 +43,7 @@ def test_raw_data_csv_creation() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     
@@ -95,6 +96,7 @@ def test_description_md_creation() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     
@@ -165,6 +167,7 @@ def test_description_in_prepared_state() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     
@@ -212,6 +215,7 @@ def test_description_in_running_state() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     
@@ -259,6 +263,7 @@ def test_history_description_endpoints() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     
@@ -313,6 +318,7 @@ def test_description_not_in_metadata() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     
@@ -363,6 +369,7 @@ def test_description_persistence() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     

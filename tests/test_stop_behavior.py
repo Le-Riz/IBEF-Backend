@@ -34,6 +34,7 @@ def test_stop_prevents_callbacks() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     
@@ -101,6 +102,7 @@ def test_stop_closes_file_handles() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     
@@ -146,6 +148,7 @@ def test_stop_prevents_data_storage_updates() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     

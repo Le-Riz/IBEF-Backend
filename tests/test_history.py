@@ -28,6 +28,7 @@ def test_history_get_metadata() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     # Prepare test
@@ -64,6 +65,7 @@ def test_history_get_metadata() -> None:
     assert "loading_mode" in data
     assert "sensor_spacing" in data
     assert "ext_support_spacing" in data
+    assert "ext_sensor_spacing" in data
     assert "load_point_spacing" in data
 
 
@@ -81,6 +83,7 @@ def test_history_download() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     client.post("/api/test/info", json=payload)
@@ -114,6 +117,7 @@ def test_history_delete_endpoint() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     client.post("/api/test/info", json=payload)
@@ -145,6 +149,7 @@ def test_history_archive_endpoint() -> None:
         "loading_mode": "compression",
         "sensor_spacing": 10.0,
         "ext_support_spacing": 20.0,
+        "ext_sensor_spacing": 20.0,
         "load_point_spacing": 15.0
     }
     client.post("/api/test/info", json=payload)
@@ -201,6 +206,7 @@ def test_history_update_metadata() -> None:
         "loading_mode": "tension",
         "sensor_spacing": 12.0,
         "ext_support_spacing": 25.0,
+        "ext_sensor_spacing": 25.0,
         "load_point_spacing": 18.0
     }
     response = client.put(f"/api/history/{test_name}", json=metadata)

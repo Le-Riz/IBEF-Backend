@@ -17,6 +17,7 @@ from core.models.sensor_enum import SensorId
 from core.models.circular_buffer import SensorDataStorage
 from core.event_hub import event_hub
 from core.processing.data_processor import PROCESSING_RATE
+from core.config_loader import config_loader
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +63,10 @@ class TestManager:
         self.graphique_disp1_draw = None
         self.graphique_arc_image = None
         self.graphique_arc_draw = None
+        # Expanded canvas to provide larger plotting area and more padding
         self.graphique_width = 1000
-        self.graphique_height = 700
-        self.graphique_margin = 50
+        self.graphique_height = 1000
+        self.graphique_margin = 70
         self.graphique_disp1_last_point = None  # Track last point for DISP_1 line drawing
         self.graphique_arc_last_point = None    # Track last point for ARC line drawing
 
@@ -423,15 +425,18 @@ class TestManager:
         Args:
             sensor_name: Either 'DISP_1' or 'ARC' to determine which graphique to draw on
         """
+        # Use config values when available (display_name and max)
+        sensor_cfg = config_loader.get_sensor_config(sensor_name) or {}
+        display_name = sensor_cfg.get("display_name", sensor_name)
+        x_label = f"{display_name}"
+
         if sensor_name == 'DISP_1':
             draw = self.graphique_disp1_draw
-            x_label = "DISP_1 (mm)"
-            x_max = 15.0
+            x_max = float(sensor_cfg.get("max", 15.0))
             x_min = 0.0
         elif sensor_name == 'ARC':
             draw = self.graphique_arc_draw
-            x_label = "ARC (mm)"
-            x_max = 5.0  # ARC range: -5 to +5 mm
+            x_max = float(sensor_cfg.get("max", 5.0))
             x_min = -5.0
         else:
             return
@@ -449,8 +454,8 @@ class TestManager:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
             font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
         except:
-            font = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+            font = ImageFont.load_default(size=24)
+            font_small = ImageFont.load_default(size=16)
         
         # X axis (bottom)
         x_axis_y = self.graphique_height - self.graphique_margin
@@ -462,7 +467,8 @@ class TestManager:
         )
         
         # Y axis (left)
-        y_axis_x = self.graphique_margin
+        # Shift Y axis (FORCE) further right for more left padding
+        y_axis_x = self.graphique_margin + 30
         draw.line(
             [(y_axis_x, self.graphique_margin), 
              (y_axis_x, self.graphique_height - self.graphique_margin)],
@@ -492,24 +498,44 @@ class TestManager:
             )
             # Draw label
             label = str(x_val)
+            # Center label horizontally and clamp within horizontal margins to avoid overflow
+            try:
+                text_w = font_small.getlength(label)
+            except Exception:
+                # Fallback if getsize missing
+                text_w = 30
+            label_x = pixel_x - (text_w / 2)
+            # Clamp so text stays inside left/right margins
+            min_x = self.graphique_margin
+            max_x = self.graphique_width - self.graphique_margin - text_w
+            label_x = max(min_x, min(max_x, label_x))
             draw.text(
-                (pixel_x - 15, x_axis_y + tick_size + 10),
+                (label_x, x_axis_y + tick_size + 10),
                 label,
                 fill=text_color,
                 font=font_small
             )
         
-        # X axis label
+        # X axis label (move lower for more bottom padding) and clamp horizontally
+        try:
+            xlabel_w = font.getlength(x_label)
+        except Exception:
+            xlabel_w = 200
+        desired_x = self.graphique_width - 220
+        min_x = self.graphique_margin
+        max_x = self.graphique_width - self.graphique_margin - xlabel_w
+        xlabel_x = max(min_x, min(max_x, desired_x))
         draw.text(
-            (self.graphique_width - 220, self.graphique_height - 30),
+            (xlabel_x, self.graphique_height - 30),
             x_label,
             fill=text_color,
             font=font
         )
         
-        # Draw ticks and labels on Y axis (FORCE: 0-1000 N)
-        force_max = 1000.0
-        force_interval = 200  # Every 200 units
+        # Draw ticks and labels on Y axis using FORCE config
+        force_cfg = config_loader.get_sensor_config("FORCE") or {}
+        force_max = float(force_cfg.get("max", 1000.0))
+        force_interval = max(int(force_max // 5), 1)  # 5 ticks by default
         
         for force_val in range(0, int(force_max) + 1, force_interval):
             pixel_y = self.graphique_height - self.graphique_margin - (force_val / force_max) * (self.graphique_height - 2 * self.graphique_margin)
@@ -522,16 +548,17 @@ class TestManager:
             # Draw label
             label = str(int(force_val))
             draw.text(
-                (y_axis_x - 55, pixel_y - 10),
+                (y_axis_x - 65, pixel_y - 10),  # shift label further left
                 label,
                 fill=text_color,
                 font=font_small
             )
         
-        # Y axis label
+        # Y axis label (use display_name if provided)
+        force_label = force_cfg.get("display_name", "FORCE")
         draw.text(
-            (5, 10),
-            "FORCE (N)",
+            (15, 10),
+            force_label,
             fill=text_color,
             font=font
         )
@@ -547,25 +574,28 @@ class TestManager:
         if not self.is_running:
             return
         
-        # Select appropriate graphique
+        # Select appropriate graphique and ranges from config
+        sensor_cfg = config_loader.get_sensor_config(sensor_name) or {}
         if sensor_name == 'DISP_1':
             draw = self.graphique_disp1_draw
             last_point = self.graphique_disp1_last_point
-            x_max = 15.0
-            x_min = 0.0
+            x_max = float(sensor_cfg.get('max', 15.0))
+            x_min = float(sensor_cfg.get('min', 0.0)) if 'min' in sensor_cfg else 0.0
         elif sensor_name == 'ARC':
             draw = self.graphique_arc_draw
             last_point = self.graphique_arc_last_point
-            x_max = 5.0
-            x_min = -5.0
+            arc_max = float(sensor_cfg.get('max', 5.0))
+            x_max = arc_max
+            x_min = -arc_max
         else:
             return
         
         if draw is None:
             return
         
-        # Scaling parameters
-        force_max = 1000.0
+        # Scaling parameters (force range from config)
+        force_cfg = config_loader.get_sensor_config("FORCE") or {}
+        force_max = float(force_cfg.get('max', 1000.0))
         x_range = x_max - x_min
         
         # Convert data to pixel coordinates

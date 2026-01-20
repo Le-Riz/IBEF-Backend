@@ -3,32 +3,50 @@
   "sensors": {
     "FORCE": {
       "baud": 115200,
-      "description": "Force sensor (capteur de force)"
+      "description": "Force sensor (capteur de force)",
+      "display_name": "Force (N)",
+      "max": 1000
     },
     "DISP_1": {
       "baud": 9600,
       "description": "Motion sensor 1 (capteur de mouvement 1)",
+      "display_name": "Flèche centrale (mm)",
+      "max": 14,
       "sender_id": "0x2E01"
     },
     "DISP_2": {
       "baud": 9600,
       "description": "Motion sensor 2 (capteur de mouvement 2)",
+      "display_name": "Déplacement 2 (mm)",
+      "max": 14,
       "sender_id": "0x2E02"
     },
     "DISP_3": {
       "baud": 9600,
       "description": "Motion sensor 3 (capteur de mouvement 3)",
+      "display_name": "Déplacement 3 (mm)",
+      "max": 14,
       "sender_id": "0x2E03"
     },
     "DISP_4": {
       "baud": 9600,
       "description": "Motion sensor 4 (capteur de mouvement 4)",
+      "display_name": "Déplacement 4 (mm)",
+      "max": 14,
       "sender_id": "0x2E04"
     },
     "DISP_5": {
       "baud": 9600,
       "description": "Motion sensor 5 (capteur de mouvement 5)",
+      "display_name": "Déplacement 5 (mm)",
+      "max": 14,
       "sender_id": "0x2E05"
+    }
+    ,
+    "ARC": {
+      "description": "Calculated arc (circular deflection)",
+      "display_name": "Flèche d'arc (mm)",
+      "max": 5
     }
   }
 }

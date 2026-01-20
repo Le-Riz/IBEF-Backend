@@ -39,10 +39,12 @@ class ServiceManager:
         
         # Serial Reader only in hardware mode
         if not emulation:
-            # Get sensor baud rates from config
+            # Get sensor baud rates from config — only include real hardware sensors
             sensor_bauds = {}
             for sensor_name, sensor_config in config_loader.get_all_sensors().items():
-                sensor_bauds[sensor_name] = sensor_config.get("baud", 9600)
+                # If a sensor has no explicit 'baud' field, treat it as a virtual/calculated sensor
+                if "baud" in (sensor_config or {}):
+                    sensor_bauds[sensor_name] = sensor_config.get("baud", 9600)
             
             # Store detected sensor info for reconnection (baud may differ from config)
             detected_sensor_info = {}  # sensor_name -> (port, baud)

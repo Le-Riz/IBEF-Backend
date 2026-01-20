@@ -94,15 +94,20 @@ class ConfigLoader:
         Check if a sensor is in configuration.
         Note: All configured sensors are considered enabled.
         """
-        return self.get_sensor_config(sensor_name) is not None
+        cfg = self.get_sensor_config(sensor_name)
+        # Treat sensors without a hardware baud as virtual/non-enabled (e.g., computed values like ARC)
+        if cfg is None:
+            return False
+        return 'baud' in cfg
     
     def get_all_sensors(self) -> Dict[str, Dict[str, Any]]:
         """Get all sensor configurations."""
         return self._config.get("sensors", {})
     
     def get_enabled_sensors(self) -> Dict[str, Dict[str, Any]]:
-        """Get all sensors (all sensors in config are considered enabled)."""
-        return self.get_all_sensors()
+        """Get only sensors that represent real hardware (have a baud)."""
+        all_sensors = self.get_all_sensors()
+        return {name: cfg for name, cfg in all_sensors.items() if isinstance(cfg, dict) and 'baud' in cfg}
     
     def reload_config(self):
         """Reload configuration from file."""

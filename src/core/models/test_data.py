@@ -15,5 +15,6 @@ class TestMetaData:
     dim_width: float = 0.0
     loading_mode: str = ""
     sensor_spacing: float = 0.0
+    ext_sensor_spacing: float = 0.0
     ext_support_spacing: float = 0.0
     load_point_spacing: float = 0.0
