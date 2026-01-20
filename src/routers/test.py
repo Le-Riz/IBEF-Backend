@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from typing import Any
+from dataclasses import asdict
 from core.models.test_data import TestMetaData
 from core.models.test_state import TestState
 from core.services.test_manager import test_manager
@@ -127,6 +128,33 @@ async def get_current_test_description() -> dict:
         return {"content": content}
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail="Description file not found")
+
+
+@router.get("/info", responses={
+    409: {
+        "description": "No test prepared. Call POST /info first.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "No test prepared. Call POST /info first."}
+            }
+        }
+    }
+})
+async def get_current_test_info() -> Any:
+    """
+    Return the metadata of the current prepared/test in memory.
+
+    Returns 409 if no test metadata was prepared via POST /info.
+    """
+    if test_manager.current_test is None:
+        raise HTTPException(status_code=409, detail="No test prepared. Call POST /info first.")
+
+    # Return a JSON-serializable dict of the TestMetaData
+    try:
+        return asdict(test_manager.current_test)
+    except Exception:
+        # Fallback: attempt to convert via dataclass fields
+        return dict(test_manager.current_test.__dict__)
 
 
 @router.put("/description", status_code=204, responses={
