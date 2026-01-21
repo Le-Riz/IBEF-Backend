@@ -14,7 +14,8 @@ def find_test_name(prefix: str) -> str:
     """Return the most recent history entry matching the given prefix."""
     list_resp = client.get("/api/history")
     histories = list_resp.json()["list"]
-    matches = [h for h in histories if h.startswith(prefix)]
+    # The test ID format may include a timestamp prefix; match anywhere in the name
+    matches = [h for h in histories if prefix in h]
     assert matches, f"No history entry found for prefix {prefix}"
     return max(matches)
 
