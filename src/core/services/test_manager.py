@@ -70,6 +70,14 @@ class TestManager:
         self.graphique_disp1_last_point = None  # Track last point for DISP_1 line drawing
         self.graphique_arc_last_point = None    # Track last point for ARC line drawing
 
+        # Numeric output precision (decimals after the decimal point)
+        # time: number of decimals for relative_time (seconds)
+        # force: decimals for FORCE sensor
+        # disp: decimals for displacement sensors (DISP_*, ARC)
+        self.time_decimals = 3
+        self.force_decimals = 2
+        self.disp_decimals = 6
+
         # Ensure dirs
         os.makedirs(TEST_DATA_DIR, exist_ok=True)
         os.makedirs(ARCHIVE_DIR, exist_ok=True)
@@ -152,7 +160,7 @@ class TestManager:
         safe_id = "".join([c for c in metadata.test_id if c.isalnum() or c in ('-','_')])
         if not safe_id: safe_id = "test"
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        final_id = f"{safe_id}_{timestamp}"
+        final_id = f"{timestamp}_{safe_id}"
         
         # Update metadata with final ID
         metadata.test_id = final_id
@@ -333,11 +341,23 @@ class TestManager:
             self.raw_csv_writer = csv.DictWriter(self.raw_csv_file, fieldnames=headers)
             self.raw_csv_writer.writeheader()
         
+        # Format numbers according to configured precision
+        def _format_raw_value(sid_name: SensorId, val: float):
+            if val is None:
+                return ""
+            if sid_name == SensorId.FORCE:
+                return f"{val:.{self.force_decimals}f}"
+            # DISP_* and ARC
+            if SensorId.DISP_1 == sid_name or SensorId.DISP_2 == sid_name or SensorId.DISP_3 == sid_name or SensorId.DISP_4 == sid_name or SensorId.DISP_5 == sid_name or sid_name == SensorId.ARC:
+                return f"{val:.{self.disp_decimals}f}"
+            # Default
+            return f"{val:.{self.force_decimals}f}"
+
         row = {
-            "timestamp": t,
-            "relative_time": rel_time,
+            "timestamp": f"{t:.{self.time_decimals}f}",
+            "relative_time": f"{rel_time:.{self.time_decimals}f}",
             "sensor_id": sensor_id.name,
-            "raw_value": value
+            "raw_value": _format_raw_value(sensor_id, value)
         }
         self.raw_csv_writer.writerow(row)
         self.raw_csv_file.flush()
@@ -371,10 +391,19 @@ class TestManager:
                 self.csv_writer = csv.DictWriter(self.csv_file, fieldnames=headers)
                 self.csv_writer.writeheader()
             
-            row = {"timestamp": t, "relative_time": rel_time}
-            # Convert enum keys to string names for CSV compatibility
+            # Format timestamp and relative_time according to precision
+            row = {"timestamp": f"{t:.{self.time_decimals}f}", "relative_time": f"{rel_time:.{self.time_decimals}f}"}
+            # Convert enum keys to string names for CSV compatibility and format values
             for sensor_id in SensorId:
-                row[sensor_id.name] = values[sensor_id.value]
+                val = values[sensor_id.value]
+                if val is None:
+                    row[sensor_id.name] = ""
+                elif sensor_id == SensorId.FORCE:
+                    row[sensor_id.name] = f"{val:.{self.force_decimals}f}"
+                elif sensor_id == SensorId.DISP_1 or sensor_id == SensorId.DISP_2 or sensor_id == SensorId.DISP_3 or sensor_id == SensorId.DISP_4 or sensor_id == SensorId.DISP_5 or sensor_id == SensorId.ARC:
+                    row[sensor_id.name] = f"{val:.{self.disp_decimals}f}"
+                else:
+                    row[sensor_id.name] = f"{val:.{self.force_decimals}f}"
             self.csv_writer.writerow(row)
             self.csv_file.flush()
 

@@ -70,8 +70,52 @@ async def download_history(name: str):
         for root, dirs, files in os.walk(test_dir):
             for file in files:
                 file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, os.path.dirname(test_dir))
+                # Use a path relative to the test directory itself so the ZIP
+                # does not contain the top-level test folder when extracted.
+                arcname = os.path.relpath(file_path, test_dir)
                 zf.write(file_path, arcname)
+        # Build a composite CSV that contains: metadata.json, description.md, then data.csv
+        try:
+            metadata_path = os.path.join(test_dir, "metadata.json")
+            description_path = os.path.join(test_dir, "description.md")
+            data_csv_path = os.path.join(test_dir, "data.csv")
+
+            # Read pieces if they exist
+            metadata_text = ""
+            try:
+                with open(metadata_path, 'r', encoding='utf-8') as mf:
+                    metadata_text = mf.read().strip()
+            except Exception:
+                metadata_text = ""
+
+            description_text = ""
+            try:
+                with open(description_path, 'r', encoding='utf-8') as df:
+                    description_text = df.read().strip()
+            except Exception:
+                description_text = ""
+
+            data_csv_text = ""
+            try:
+                with open(data_csv_path, 'r', encoding='utf-8') as cf:
+                    data_csv_text = cf.read().strip()
+            except Exception:
+                data_csv_text = ""
+
+            # Compose CSV-like content: metadata, blank line, description, blank line, data.csv
+            parts = []
+            parts.append(f"\"metadata\": {metadata_text}")
+            parts.append("")
+            parts.append(description_text)
+            parts.append("")
+            parts.append(data_csv_text)
+
+            export_content = "\n".join(parts)
+            # Write the combined CSV at the root of the ZIP (no subfolder)
+            zf.writestr("export.csv", export_content)
+        except Exception:
+            # If anything goes wrong building the export CSV, continue without it
+            pass
     
     buf.seek(0)
     return StreamingResponse(

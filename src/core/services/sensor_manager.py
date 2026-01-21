@@ -184,10 +184,10 @@ class SensorManager:
             # Slight scale differences per sensor for diversity
             scale = {
                 SensorId.DISP_1: 1.00,
-                SensorId.DISP_2: 1.05,
-                SensorId.DISP_3: 0.95,
-                SensorId.DISP_4: 1.02,
-                SensorId.DISP_5: 0.98,
+                SensorId.DISP_2: 1.10,
+                SensorId.DISP_3: 0.90,
+                SensorId.DISP_4: 1.20,
+                SensorId.DISP_5: 0.80,
             }[sensor_id]
             self._notify(sensor_id, disp_val * scale)
 
