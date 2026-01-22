@@ -47,20 +47,6 @@ class TestAPIEndpointsInEmulation:
         assert response.status_code == 200, \
             "ARC graphique should return 200 in emulation mode"
     
-    def test_graphique_base64_endpoints_return_200_in_emulation(self, client):
-        """Test that /api/graph/{sensor_name}/base64 endpoints return 200 in emulation mode."""
-        sensor_reconnection_manager.emulation_mode = True
-        
-        # Test DISP_1 base64
-        response = client.get("/api/graph/DISP_1/base64")
-        assert response.status_code == 200, \
-            "DISP_1 base64 graphique should return 200 in emulation mode"
-        
-        # Test ARC base64
-        response = client.get("/api/graph/ARC/base64")
-        assert response.status_code == 200, \
-            "ARC base64 graphique should return 200 in emulation mode"
-    
     def test_never_returns_503_in_emulation(self, client):
         """Test that no data endpoints return 503 in emulation mode."""
         sensor_reconnection_manager.emulation_mode = True

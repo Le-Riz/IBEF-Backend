@@ -203,7 +203,7 @@ class PortDetector:
                     )
                     local_used_ports.add(port)
                     if verbose:
-                        logger.info(f"✓ Detected {sensor_id.name} on {port} @ {baud} baud")
+                        logger.info(f"✓ Detected {sensor_id} on {port} @ {baud} baud")
                     break
                 
                 elif sensor_type == "DISP" and (sensor_id == SensorId.DISP_1 or
@@ -220,7 +220,7 @@ class PortDetector:
                     local_used_ports.add(port)
                     disp_count += 1
                     if verbose:
-                        logger.info(f"✓ Detected {sensor_id.name} on {port} @ {baud} baud")
+                        logger.info(f"✓ Detected {sensor_id} on {port} @ {baud} baud")
                     break
         
         # Update persistent state
@@ -231,7 +231,7 @@ class PortDetector:
         if verbose:
             logger.info(f"Sensor detection complete. Found {len(detected)} sensors:")
             for sensor_id, sensor in detected.items():
-                logger.info(f"  - {sensor_id.name}: {sensor.port} @ {sensor.baud} baud (confidence: {sensor.confidence:.0%})")
+                logger.info(f"  - {sensor_id}: {sensor.port} @ {sensor.baud} baud (confidence: {sensor.confidence:.0%})")
         
         # Warn about missing sensors (only if verbose)
         missing_sensors = set(sensor_bauds.keys()) - set(detected.keys())

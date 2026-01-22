@@ -356,7 +356,7 @@ class TestManager:
         row = {
             "timestamp": f"{t:.{self.time_decimals}f}",
             "relative_time": f"{rel_time:.{self.time_decimals}f}",
-            "sensor_id": sensor_id.name,
+            "sensor_id": sensor_id,
             "raw_value": _format_raw_value(sensor_id, value)
         }
         self.raw_csv_writer.writerow(row)

@@ -1,6 +1,7 @@
 import pytest
 import asyncio
 import time
+from core.models.sensor_enum import SensorId
 from core.sensor_reconnection import (
     SensorHealthMonitor, 
     SensorReconnectionManager,
@@ -14,14 +15,14 @@ class TestSensorHealthMonitor:
     
     def test_monitor_initialization(self):
         """Test health monitor initializes correctly."""
-        monitor = SensorHealthMonitor(sensor_name="FORCE", max_silence_time=5.0)
-        assert monitor.sensor_name == "FORCE"
+        monitor = SensorHealthMonitor(SensorId.FORCE, max_silence_time=5.0)
+        assert monitor.sensor_id == SensorId.FORCE
         assert monitor.state == SensorState.CONNECTED
         assert monitor.reconnect_attempts == 0
     
     def test_record_data_resets_state(self):
         """Test recording data resets disconnected state."""
-        monitor = SensorHealthMonitor(sensor_name="DISP_1")
+        monitor = SensorHealthMonitor(SensorId.DISP_1)
         monitor.mark_disconnected()
         assert monitor.state == SensorState.DISCONNECTED
         
@@ -30,7 +31,7 @@ class TestSensorHealthMonitor:
     
     def test_check_silence_detects_timeout(self):
         """Test silence detection."""
-        monitor = SensorHealthMonitor(sensor_name="FORCE", max_silence_time=0.1)
+        monitor = SensorHealthMonitor(SensorId.FORCE, max_silence_time=0.1)
         # Just created, should not be silent
         assert monitor.check_silence() == False
         
@@ -41,7 +42,7 @@ class TestSensorHealthMonitor:
     def test_backoff_delay_increases(self):
         """Test backoff delay increases exponentially."""
         monitor = SensorHealthMonitor(
-            sensor_name="DISP_1",
+            sensor_id=SensorId.DISP_1,
             initial_reconnect_delay=1.0,
             backoff_multiplier=2.0
         )
@@ -57,7 +58,7 @@ class TestSensorHealthMonitor:
     def test_backoff_delay_caps_at_max(self):
         """Test backoff delay doesn't exceed maximum."""
         monitor = SensorHealthMonitor(
-            sensor_name="FORCE",
+            sensor_id=SensorId.FORCE,
             initial_reconnect_delay=1.0,
             max_reconnect_delay=5.0,
             backoff_multiplier=2.0
@@ -82,46 +83,44 @@ class TestSensorReconnectionManager:
     def test_add_sensor(self):
         """Test adding sensors to monitor."""
         mgr = SensorReconnectionManager()
-        mgr.add_sensor("TEST_FORCE", max_silence_time=5.0)
+        mgr.add_sensor(SensorId.FORCE, max_silence_time=5.0)
         
-        assert "TEST_FORCE" in mgr.monitors
-        assert mgr.monitors["TEST_FORCE"].sensor_name == "TEST_FORCE"
+        assert SensorId.FORCE in mgr.monitors
+        assert mgr.monitors[SensorId.FORCE].sensor_id == SensorId.FORCE
     
     def test_record_sensor_data(self):
         """Test recording data for a sensor."""
         mgr = SensorReconnectionManager()
-        mgr.add_sensor("TEST_DISP", max_silence_time=5.0)
+        mgr.add_sensor(SensorId.DISP_1, max_silence_time=5.0)
         
-        monitor = mgr.monitors["TEST_DISP"]
+        monitor = mgr.monitors[SensorId.DISP_1]
         old_time = monitor.last_data_time
         time.sleep(0.1)
         
-        mgr.record_sensor_data("TEST_DISP")
+        mgr.record_sensor_data(SensorId.DISP_1)
         
         assert monitor.last_data_time > old_time
     
     def test_get_sensor_status(self):
         """Test getting sensor status."""
         mgr = SensorReconnectionManager()
-        mgr.add_sensor("TEST_SENSOR", max_silence_time=5.0)
+        mgr.add_sensor(SensorId.FORCE, max_silence_time=5.0)
         
-        status = mgr.get_sensor_status("TEST_SENSOR")
+        status = mgr.get_sensor_status(SensorId.FORCE)
         assert status is not None
-        assert status["name"] == "TEST_SENSOR"
-        assert status["state"] == SensorState.CONNECTED.value
-        assert "silence_duration" in status
-        assert "reconnect_attempts" in status
+        assert status.sensor_id == SensorId.FORCE
+        assert status.state == SensorState.CONNECTED
     
     def test_get_all_statuses(self):
         """Test getting status of all sensors."""
         mgr = SensorReconnectionManager()
-        mgr.add_sensor("SENSOR_1")
-        mgr.add_sensor("SENSOR_2")
+        mgr.add_sensor(SensorId.DISP_2)
+        mgr.add_sensor(SensorId.DISP_3)
         
         statuses = mgr.get_all_statuses()
         assert len(statuses) >= 2
-        assert "SENSOR_1" in statuses
-        assert "SENSOR_2" in statuses
+        assert SensorId.DISP_2 in statuses
+        assert SensorId.DISP_3 in statuses
     
     def test_register_callback(self):
         """Test registering reconnection callback."""
@@ -130,8 +129,8 @@ class TestSensorReconnectionManager:
         async def dummy_callback(sensor_name: str) -> bool:
             return True
         
-        mgr.register_reconnection_callback("TEST", dummy_callback)
-        assert "TEST" in mgr.reconnection_callbacks
+        mgr.register_reconnection_callback(SensorId.DISP_5, dummy_callback)
+        assert SensorId.DISP_5 in mgr.reconnection_callbacks
 
 
 class TestReconnectionFlow:
@@ -141,10 +140,10 @@ class TestReconnectionFlow:
     async def test_silence_detection_triggers_disconnect(self):
         """Test that prolonged silence triggers disconnect."""
         mgr = SensorReconnectionManager()
-        mgr.add_sensor("TEST_SENSOR", max_silence_time=0.2)
+        mgr.add_sensor(SensorId.FORCE, max_silence_time=0.2)
         
         # Initially connected
-        monitor = mgr.monitors["TEST_SENSOR"]
+        monitor = mgr.monitors[SensorId.FORCE]
         assert monitor.state == SensorState.CONNECTED
         
         # Wait for silence to be detected

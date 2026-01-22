@@ -93,7 +93,7 @@ class SensorManager:
                 current_val = self.sensors[sensor_id.value]
                 old_offset = self.offsets[sensor_id.value]
                 self.offsets[sensor_id.value] = old_offset + current_val
-                logger.info(f"Zeroed sensor {sensor_id.name}. New offset: {self.offsets[sensor_id.value]}")
+                logger.info(f"Zeroed sensor {sensor_id}. New offset: {self.offsets[sensor_id.value]}")
 
     def _parse_force(self, line):
         # ASC2 20945595 -165341 -1.527986e-01 -4.965955e+01 -0.000000e+00
@@ -126,7 +126,7 @@ class SensorManager:
             if sensor_id is None:
                 sensor_id = self._assign_motion_sensor(sender_id)
                 if sensor_id:
-                    logger.info(f"Assigned motion sender {sender_id} to {sensor_id.name}")
+                    logger.info(f"Assigned motion sender {sender_id} to {sensor_id}")
 
             if sensor_id:
                 self._notify(sensor_id, val)

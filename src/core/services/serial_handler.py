@@ -12,7 +12,7 @@ async def serial_reader(sensor_id: SensorId, port: str, baudrate: int = 9600):
         baudrate (int): The baud rate for the serial connection (default 9600).
         sensor_id (SensorId): Sensor identifier for logging and identification.
     """
-    sensor_label = f"{sensor_id.name} ({port})" if sensor_id else port
+    sensor_label = f"{sensor_id} ({port})" if sensor_id else port
     print(f"Trying to connect to {sensor_label} at {baudrate} baud...")
     try:
         # Open the serial port

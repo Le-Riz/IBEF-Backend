@@ -41,7 +41,7 @@ class SensorHealthMonitor:
         """Record that data was received from this sensor."""
         self.last_data_time = time.time()
         if self.state != SensorState.CONNECTED:
-            logger.info(f"✓ {self.sensor_id.name} reconnected!")
+            logger.info(f"✓ {self.sensor_id} reconnected!")
             self.state = SensorState.CONNECTED
             self.reconnect_attempts = 0
             self.current_backoff_delay = self.initial_reconnect_delay
@@ -58,7 +58,7 @@ class SensorHealthMonitor:
     def mark_disconnected(self):
         """Mark sensor as disconnected and prepare for reconnection."""
         if self.state != SensorState.DISCONNECTED:
-            logger.warning(f"⚠ {self.sensor_id.name} disconnected (no data for {self.get_silence_duration():.1f}s)")
+            logger.warning(f"⚠ {self.sensor_id} disconnected (no data for {self.get_silence_duration():.1f}s)")
             self.state = SensorState.DISCONNECTED
             self.reconnect_attempts = 0
             self.current_backoff_delay = self.initial_reconnect_delay
@@ -67,7 +67,7 @@ class SensorHealthMonitor:
         """Mark sensor as currently attempting reconnection."""
         self.state = SensorState.RECONNECTING
         self.reconnect_attempts += 1
-        logger.info(f"🔄 Attempting to reconnect {self.sensor_id.name} (attempt {self.reconnect_attempts}, wait {self.current_backoff_delay:.1f}s)...")
+        logger.info(f"🔄 Attempting to reconnect {self.sensor_id} (attempt {self.reconnect_attempts}, wait {self.current_backoff_delay:.1f}s)...")
     
     def mark_failed(self):
         """Mark reconnection attempt as failed."""
@@ -132,7 +132,7 @@ class SensorReconnectionManager:
         
         self.monitors[sensor_id] = monitor
         status = "connected" if is_connected else "disconnected"
-        logger.info(f"Added health monitor for {sensor_id.name} (max silence: {max_silence_time}s, initial: {status})")
+        logger.info(f"Added health monitor for {sensor_id} (max silence: {max_silence_time}s, initial: {status})")
     
     def register_reconnection_callback(self, sensor_id: SensorId, callback: Callable):
         """
@@ -189,11 +189,11 @@ class SensorReconnectionManager:
                             success = task.result()
                             if success:
                                 monitor.record_data()  # Will set state to CONNECTED
-                                logger.info(f"✓ {sensor_id.name} successfully reconnected")
+                                logger.info(f"✓ {sensor_id} successfully reconnected")
                             else:
                                 monitor.mark_failed()
                         except Exception as e:
-                            logger.error(f"Reconnection error for {sensor_id.name}: {e}")
+                            logger.error(f"Reconnection error for {sensor_id}: {e}")
                             monitor.mark_failed()
                         finally:
                             del self.reconnection_tasks[sensor_id]
@@ -207,7 +207,7 @@ class SensorReconnectionManager:
         monitor = self.monitors[sensor_id]
         
         if sensor_id not in self.reconnection_callbacks:
-            logger.warning(f"No reconnection callback registered for {sensor_id.name}")
+            logger.warning(f"No reconnection callback registered for {sensor_id}")
             return
         
         # Get backoff delay
@@ -224,7 +224,7 @@ class SensorReconnectionManager:
                 success = await callback(sensor_id)
                 return success
             except Exception as e:
-                logger.error(f"Exception during reconnection of {sensor_id.name}: {e}")
+                logger.error(f"Exception during reconnection of {sensor_id}: {e}")
                 return False
         
         task = asyncio.create_task(reconnect_with_delay())

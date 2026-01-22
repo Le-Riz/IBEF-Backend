@@ -54,7 +54,7 @@ class ServiceManager:
             # Register reconnection callback
             async def reconnect_sensor(sensor_id: SensorId) -> bool:
                 """Attempt to reconnect a specific sensor."""
-                logger.info(f"Attempting to reconnect {sensor_id.name}...")
+                logger.info(f"Attempting to reconnect {sensor_id}...")
                 
                 # Use detected baud if available, otherwise use configured baud
                 baud_to_use = sensor_bauds[sensor_id]
@@ -73,7 +73,7 @@ class ServiceManager:
                 
                 if sensor_id in detected:
                     sensor_info = detected[sensor_id]
-                    logger.info(f"✓ Re-detected {sensor_id.name} on {sensor_info.port} @ {sensor_info.baud} baud")
+                    logger.info(f"✓ Re-detected {sensor_id} on {sensor_info.port} @ {sensor_info.baud} baud")
                     detected_sensor_info[sensor_id] = (sensor_info.port, sensor_info.baud)
                     reconnection_failure_state[sensor_id] = False  # Clear failure state
                     
@@ -92,14 +92,14 @@ class ServiceManager:
                     # Only log warning on first failure, not on every retry
                     was_failing = reconnection_failure_state.get(sensor_id, False)
                     if not was_failing:
-                        logger.warning(f"✗ Could not re-detect {sensor_id.name}")
+                        logger.warning(f"✗ Could not re-detect {sensor_id}")
                         reconnection_failure_state[sensor_id] = True
                     
                     # Remove old port from used_ports if the sensor was assigned to one
                     # This allows the port to be reassigned to another sensor
                     if old_port and old_port in port_detector.used_ports:
                         port_detector.used_ports.discard(old_port)
-                        logger.debug(f"Released port {old_port} from {sensor_id.name} for reuse")
+                        logger.debug(f"Released port {old_port} from {sensor_id} for reuse")
                     return False
             
             # Periodic detection of missing sensors

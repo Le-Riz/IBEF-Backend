@@ -1,6 +1,7 @@
 """Verification tests for emulation mode behavior - ensures sensors never disconnect in emulation."""
 
 import pytest
+from core.models.sensor_enum import SensorId
 from core.sensor_reconnection import sensor_reconnection_manager, SensorState
 
 
@@ -12,13 +13,13 @@ class TestEmulationGuarantees:
         sensor_reconnection_manager.emulation_mode = True
         
         # Even if monitor is empty, should return True
-        assert sensor_reconnection_manager.is_sensor_connected("FORCE") is True
-        assert sensor_reconnection_manager.is_sensor_connected("DISP_1") is True
-        assert sensor_reconnection_manager.is_sensor_connected("DISP_2") is True
-        assert sensor_reconnection_manager.is_sensor_connected("DISP_3") is True
-        assert sensor_reconnection_manager.is_sensor_connected("DISP_4") is True
-        assert sensor_reconnection_manager.is_sensor_connected("DISP_5") is True
-        assert sensor_reconnection_manager.is_sensor_connected("ARC") is True
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.FORCE) is True
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_1) is True
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_2) is True
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_3) is True
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_4) is True
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_5) is True
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.ARC) is True
         
         # Reset emulation mode
         sensor_reconnection_manager.emulation_mode = True
@@ -28,14 +29,14 @@ class TestEmulationGuarantees:
         sensor_reconnection_manager.emulation_mode = True
         
         # Manually mark sensors as disconnected
-        for sensor_name in ["FORCE", "DISP_1", "DISP_2", "DISP_3", "DISP_4", "DISP_5"]:
-            if sensor_name in sensor_reconnection_manager.monitors:
-                sensor_reconnection_manager.monitors[sensor_name].state = SensorState.DISCONNECTED
+        for sensor_id in [SensorId.FORCE, SensorId.DISP_1, SensorId.DISP_2, SensorId.DISP_3, SensorId.DISP_4, SensorId.DISP_5]:
+            if sensor_id in sensor_reconnection_manager.monitors:
+                sensor_reconnection_manager.monitors[sensor_id].state = SensorState.DISCONNECTED
         
         # Even though we marked them as disconnected, emulation mode should return True
-        assert sensor_reconnection_manager.is_sensor_connected("FORCE") is True
-        assert sensor_reconnection_manager.is_sensor_connected("DISP_1") is True
-        assert sensor_reconnection_manager.is_sensor_connected("ARC") is True
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.FORCE) is True
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_1) is True
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.ARC) is True
         
         # Reset emulation mode
         sensor_reconnection_manager.emulation_mode = True
@@ -45,14 +46,14 @@ class TestEmulationGuarantees:
         sensor_reconnection_manager.emulation_mode = False
         
         # Ensure sensor exists
-        if "FORCE" not in sensor_reconnection_manager.monitors:
-            sensor_reconnection_manager.add_sensor("FORCE", max_silence_time=5.0, is_connected=True)
+        if SensorId.FORCE not in sensor_reconnection_manager.monitors:
+            sensor_reconnection_manager.add_sensor(SensorId.FORCE, max_silence_time=5.0, is_connected=True)
         
         # Mark as disconnected
-        sensor_reconnection_manager.monitors["FORCE"].state = SensorState.DISCONNECTED
+        sensor_reconnection_manager.monitors[SensorId.FORCE].state = SensorState.DISCONNECTED
         
         # In hardware mode, should return False
-        assert sensor_reconnection_manager.is_sensor_connected("FORCE") is False
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.FORCE) is False
         
         # Clean up
         sensor_reconnection_manager.emulation_mode = True
@@ -60,19 +61,19 @@ class TestEmulationGuarantees:
     def test_emulation_vs_hardware_behavior_difference(self):
         """Verify the critical difference between emulation and hardware modes."""
         # Ensure sensor exists
-        if "DISP_2" not in sensor_reconnection_manager.monitors:
-            sensor_reconnection_manager.add_sensor("DISP_2", max_silence_time=5.0, is_connected=True)
+        if SensorId.DISP_2 not in sensor_reconnection_manager.monitors:
+            sensor_reconnection_manager.add_sensor(SensorId.DISP_2, max_silence_time=5.0, is_connected=True)
         
         # Mark as disconnected
-        sensor_reconnection_manager.monitors["DISP_2"].state = SensorState.DISCONNECTED
+        sensor_reconnection_manager.monitors[SensorId.DISP_2].state = SensorState.DISCONNECTED
         
         # In emulation mode: should return True (emulation override)
         sensor_reconnection_manager.emulation_mode = True
-        assert sensor_reconnection_manager.is_sensor_connected("DISP_2") is True
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_2) is True
         
         # In hardware mode: should return False (respects disconnection)
         sensor_reconnection_manager.emulation_mode = False
-        assert sensor_reconnection_manager.is_sensor_connected("DISP_2") is False
+        assert sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_2) is False
         
         # Back to emulation
         sensor_reconnection_manager.emulation_mode = True

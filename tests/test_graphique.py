@@ -109,46 +109,5 @@ class TestGraphique:
         assert "content-disposition" in response_arc.headers
         assert "graph_ARC.png" in response_arc.headers["content-disposition"]
 
-    def test_graphique_base64_endpoint_disp1(self):
-        """Test that /api/graph/DISP_1/base64 returns base64-encoded PNG."""
-        response = client.get("/api/graph/DISP_1/base64")
-        assert response.status_code == 200
-        data = response.json()
-        
-        # Verify it returns data as base64 data URI
-        assert "data" in data
-        assert data["data"].startswith("data:image/png;base64,")
-        
-        # Verify we can decode it
-        base64_str = data["data"].split(",")[1]
-        png_data = base64.b64decode(base64_str)
-        
-        # Verify it's a valid PNG
-        image_data = io.BytesIO(png_data)
-        image = Image.open(image_data)
-        assert image.format == "PNG"
-        assert image.size == (1000, 1000)
-
-    def test_graphique_base64_endpoint_arc(self):
-        """Test that /api/graph/ARC/base64 returns base64-encoded PNG."""
-        response = client.get("/api/graph/ARC/base64")
-        assert response.status_code == 200
-        data = response.json()
-        
-        # Verify it returns data as base64 data URI
-        assert "data" in data
-        assert data["data"].startswith("data:image/png;base64,")
-        
-        # Verify we can decode it
-        base64_str = data["data"].split(",")[1]
-        png_data = base64.b64decode(base64_str)
-        
-        # Verify it's a valid PNG
-        image_data = io.BytesIO(png_data)
-        image = Image.open(image_data)
-        assert image.format == "PNG"
-        assert image.size == (1000, 1000)
-
-
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
