@@ -53,8 +53,8 @@ class ConfigLoader:
                     self._config.sensors[sensor_id] = configSensorData(
                         baud=sensor_cfg.get("baud", 9600),
                         description=sensor_cfg.get("description", ""),
-                        displayName=sensor_cfg.get("displayName", ""),
-                        senderId=sensor_cfg.get("senderId", ""),
+                        displayName=sensor_cfg.get("display_name", ""),
+                        senderId=sensor_cfg.get("sender_id", ""),
                         max=sensor_cfg.get("max", 0.0),
                         enabled=sensor_cfg.get("enabled", True)
                     )

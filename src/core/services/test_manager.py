@@ -64,9 +64,9 @@ class TestManager:
         self.graphique_arc_image = None
         self.graphique_arc_draw = None
         # Expanded canvas to provide larger plotting area and more padding
-        self.graphique_width = 1000
-        self.graphique_height = 1000
-        self.graphique_margin = 70
+        self.graphique_width = 1100
+        self.graphique_height = 1100
+        self.graphique_margin = 85
         self.graphique_disp1_last_point = None  # Track last point for DISP_1 line drawing
         self.graphique_arc_last_point = None    # Track last point for ARC line drawing
 
@@ -492,11 +492,11 @@ class TestManager:
         
         # Try to use a default font, fall back to default if not available
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 34)
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
         except:
-            font = ImageFont.load_default(size=24)
-            font_small = ImageFont.load_default(size=16)
+            font = ImageFont.load_default(size=34)
+            font_small = ImageFont.load_default(size=22)
         
         # X axis (bottom)
         x_axis_y = self.graphique_height - self.graphique_margin
@@ -567,7 +567,7 @@ class TestManager:
         max_x = self.graphique_width - self.graphique_margin - xlabel_w
         xlabel_x = max(min_x, min(max_x, desired_x))
         draw.text(
-            (xlabel_x, self.graphique_height - 30),
+            (xlabel_x, self.graphique_height - self.graphique_margin + 40),
             x_label,
             fill=text_color,
             font=font

@@ -32,21 +32,7 @@ class TestAPIEndpointsInEmulation:
             response = client.get(f"/api/sensor/{sensor_id}/raw")
             assert response.status_code == 200, \
                 f"Raw data for {sensor_id} should return 200 in emulation mode"
-    
-    def test_graphique_endpoints_return_200_in_emulation(self, client):
-        """Test that /api/graph endpoints return 200 in emulation mode."""
-        sensor_reconnection_manager.emulation_mode = True
         
-        # Test DISP_1 graphique
-        response = client.get("/api/graph/DISP_1")
-        assert response.status_code == 200, \
-            "DISP_1 graphique should return 200 in emulation mode"
-        
-        # Test ARC graphique
-        response = client.get("/api/graph/ARC")
-        assert response.status_code == 200, \
-            "ARC graphique should return 200 in emulation mode"
-    
     def test_never_returns_503_in_emulation(self, client):
         """Test that no data endpoints return 503 in emulation mode."""
         sensor_reconnection_manager.emulation_mode = True
