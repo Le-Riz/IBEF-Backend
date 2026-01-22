@@ -30,7 +30,7 @@ ARCHIVE_DIR = os.path.join(STORAGE_ROOT, "archived_data")
 # Sampling frequency per sensor type (Hz - points per second)
 # Used to calculate buffer capacity and reference array sizes
 # Default: 20 Hz (50ms between points)
-SENSOR_SAMPLING_FREQ = 2.0
+SENSOR_SAMPLING_FREQ = 5.0
 
 
 class TestManager:
@@ -46,7 +46,7 @@ class TestManager:
         # not raw sensor frequency. If raw > processing rate, effective freq = processing rate.
         # Align buffer sampling with the processor publish rate to avoid underestimating window span
         effective_freq = PROCESSING_RATE
-        self.data_storage = SensorDataStorage(len(list(SensorId)), effective_freq)
+        self.data_storage = SensorDataStorage(len(list(SensorId)), min(effective_freq,SENSOR_SAMPLING_FREQ))
         
         self.start_time = 0.0
         
@@ -409,13 +409,25 @@ class TestManager:
 
         # Store data in circular buffers
         # Append (relative_time, value) tuples for each sensor
+        # Only append points that respect the storage sampling frequency.
+        # For each sensor, check the last recorded point time and ensure the
+        # new point's relative time is >= last_time + spacing (with small epsilon).
+        spacing = 1.0 / float(self.data_storage.sampling_frequency)
+        epsilon = 1e-6
         for sensor_id in SensorId:
-            self.data_storage.append(
-                sensor_id.value,
-                rel_time,
-                values[sensor_id.value]
-            )
-
+            sensor_idx = sensor_id.value
+            val = values[sensor_idx]
+            buffer = self.data_storage.buffers[sensor_idx]
+            if buffer.size() == 0:
+                # buffer empty -> always append
+                self.data_storage.append(sensor_idx, rel_time, val)
+            else:
+                # Get last recorded time (logical index = size-1)
+                last_time, _ = buffer.get(buffer.size() - 1)
+                expected_time = last_time + spacing
+                if rel_time + epsilon >= expected_time:
+                    self.data_storage.append(sensor_idx, rel_time, val)
+                
     def get_sensor_history(self, sensor_id: SensorId, window_seconds: int):
         """Return recent data for a sensor over the requested window (seconds)."""
         # Allow history access while a test is stopped but not yet finalized
