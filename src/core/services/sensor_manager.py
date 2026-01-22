@@ -134,16 +134,19 @@ class SensorManager:
     def _load_motion_sensor_mapping(self):
         """Load pre-defined motion sensor mappings from config."""
         sensors_config = config_loader.get_all_sensors()
-        for name, sensor_config in sensors_config.items():
-            if not name.startswith("DISP"):
+        for sensor_id, sensor_config in sensors_config.items():
+            if not (sensor_id == SensorId.DISP_1 or
+                    sensor_id == SensorId.DISP_2 or
+                    sensor_id == SensorId.DISP_3 or
+                    sensor_id == SensorId.DISP_4 or
+                    sensor_id == SensorId.DISP_5):
                 continue
-            sender_id = sensor_config.get("sender_id")
+            
+            sender_id = sensor_config.senderId
+            
             if not sender_id:
                 continue
-            try:
-                sensor_id = SensorId[name]
-            except KeyError:
-                continue
+            
             self.motion_sensor_map[sender_id] = sensor_id
         if self.motion_sensor_map:
             logger.info(f"Loaded {len(self.motion_sensor_map)} motion sensor mappings from config")
@@ -165,10 +168,13 @@ class SensorManager:
 
     def _emulate_data(self, start_time):
         elapsed = time.time() - start_time
-        
-        # Emulate Force (Sine wave)
-        force_val = 500 + 500 * math.sin(elapsed) + random.uniform(-10, 10)
-        self._notify(SensorId.FORCE, force_val)
+
+        from core.config_loader import config_loader
+
+        # Emulate Force (Sine wave) only if enabled
+        if config_loader.is_sensor_enabled(SensorId.FORCE):
+            force_val = 500 + 500 * math.sin(elapsed) + random.uniform(-10, 10)
+            self._notify(SensorId.FORCE, force_val)
 
         # Emulate Displacement (Linear + Noise) with per-sensor phase offsets to avoid overlap
         phase_offsets = {
@@ -180,16 +186,17 @@ class SensorManager:
         }
 
         for sensor_id, phase in phase_offsets.items():
-            disp_val = ((elapsed + phase) * 0.1) % 10 + random.uniform(-0.05, 0.05)
-            # Slight scale differences per sensor for diversity
-            scale = {
-                SensorId.DISP_1: 1.00,
-                SensorId.DISP_2: 1.10,
-                SensorId.DISP_3: 0.90,
-                SensorId.DISP_4: 1.20,
-                SensorId.DISP_5: 0.80,
-            }[sensor_id]
-            self._notify(sensor_id, disp_val * scale)
+            if config_loader.is_sensor_enabled(sensor_id):
+                disp_val = ((elapsed + phase) * 0.1) % 10 + random.uniform(-0.05, 0.05)
+                # Slight scale differences per sensor for diversity
+                scale = {
+                    SensorId.DISP_1: 1.00,
+                    SensorId.DISP_2: 1.10,
+                    SensorId.DISP_3: 0.90,
+                    SensorId.DISP_4: 1.20,
+                    SensorId.DISP_5: 0.80,
+                }[sensor_id]
+                self._notify(sensor_id, disp_val * scale)
 
     def _notify(self, sensor_id: SensorId, value: float):
         # Apply offset
@@ -198,8 +205,7 @@ class SensorManager:
 
         # Record data reception for health monitoring (in hardware mode)
         if not self.emulation_mode:
-            sensor_name = sensor_id.name
-            sensor_reconnection_manager.record_sensor_data(sensor_name)
+            sensor_reconnection_manager.record_sensor_data(sensor_id)
 
         # Publish raw value (before offset correction)
         raw_data = SensorData(

@@ -3,6 +3,9 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 
+from core.models.sensor_enum import SensorId
+from core.models.config_data import configData, configSensorData
+
 logger = logging.getLogger(__name__)
 
 class ConfigLoader:
@@ -43,71 +46,84 @@ class ConfigLoader:
         
         try:
             with open(config_path, 'r') as f:
-                self._config = json.load(f)
+                json_data = json.load(f)
+                # Parse JSON into configData structure
+                for sensor_key, sensor_cfg in json_data.get("sensors", {}).items():
+                    sensor_id = SensorId[sensor_key]
+                    self._config.sensors[sensor_id] = configSensorData(
+                        baud=sensor_cfg.get("baud", 9600),
+                        description=sensor_cfg.get("description", ""),
+                        displayName=sensor_cfg.get("displayName", ""),
+                        senderId=sensor_cfg.get("senderId", ""),
+                        max=sensor_cfg.get("max", 0.0),
+                        enabled=sensor_cfg.get("enabled", True)
+                    )
+                self._config.emulation = json_data.get("emulation", True)
             logger.info(f"Configuration loaded from {config_path}")
+            
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse configuration file: {e}")
             self._config = self._get_default_config()
+            
         except Exception as e:
             logger.error(f"Unexpected error loading configuration: {e}")
             self._config = self._get_default_config()
     
     @staticmethod
-    def _get_default_config() -> Dict[str, Any]:
+    def _get_default_config() -> configData:
         """Return default configuration."""
-        return {
-            "emulation": True,
-            "sensors": {
-                "FORCE": {"baud": 115200, "port": "/dev/ttyUSB0", "enabled": True},
-                "DISP_1": {"baud": 9600, "port": "/dev/ttyUSB1", "enabled": True, "sender_id": "0x2E01"},
-                "DISP_2": {"baud": 9600, "port": "/dev/ttyUSB2", "enabled": False},
-                "DISP_3": {"baud": 9600, "port": "/dev/ttyUSB3", "enabled": False},
-                "DISP_4": {"baud": 9600, "port": "/dev/ttyUSB4", "enabled": False},
-                "DISP_5": {"baud": 9600, "port": "/dev/ttyUSB5", "enabled": False},
+        
+        return configData(
+            emulation=True,
+            sensors={
+                SensorId.FORCE: configSensorData(baud=115200, description="", displayName="", senderId="", max=0.0, enabled=True),
+                SensorId.DISP_1: configSensorData(baud=9600, description="", displayName="", senderId="", max=0.0, enabled=True),
+                SensorId.DISP_2: configSensorData(baud=9600, description="", displayName="", senderId="", max=0.0, enabled=False),
+                SensorId.DISP_3: configSensorData(baud=9600, description="", displayName="", senderId="", max=0.0, enabled=False),
+                SensorId.DISP_4: configSensorData(baud=9600, description="", displayName="", senderId="", max=0.0, enabled=False),
+                SensorId.DISP_5: configSensorData(baud=9600, description="", displayName="", senderId="", max=0.0, enabled=False),
             }
-        }
+        )
     
     def get_emulation_mode(self) -> bool:
         """Get the emulation mode setting."""
-        return self._config.get("emulation", True)
+        return self._config.emulation
     
-    def get_sensor_config(self, sensor_name: str) -> Optional[Dict[str, Any]]:
+    def get_sensor_config(self, sensor_id: SensorId) -> configSensorData:
         """Get configuration for a specific sensor."""
-        return self._config.get("sensors", {}).get(sensor_name)
+        return self._config.sensors[sensor_id]
     
-    def get_sensor_baud(self, sensor_name: str) -> int:
+    def get_sensor_baud(self, sensor_id: SensorId) -> int:
         """Get the baud rate for a specific sensor."""
-        sensor_config = self.get_sensor_config(sensor_name)
+        sensor_config = self.get_sensor_config(sensor_id)
         if sensor_config:
-            return sensor_config.get("baud", 9600)
+            return sensor_config.baud
         return 9600
     
-    def get_sensor_port(self, sensor_name: str) -> Optional[str]:
+    def is_sensor_enabled(self, sensor_id: SensorId) -> bool:
         """
-        Get the port for a specific sensor from auto-detection results.
-        Note: Ports are not stored in config file; use port_detector instead.
+        Check if a sensor is enabled in configuration (enabled: true, except ARC).
         """
-        return None  # Ports are auto-detected, not in config
-    
-    def is_sensor_enabled(self, sensor_name: str) -> bool:
-        """
-        Check if a sensor is in configuration.
-        Note: All configured sensors are considered enabled.
-        """
-        cfg = self.get_sensor_config(sensor_name)
-        # Treat sensors without a hardware baud as virtual/non-enabled (e.g., computed values like ARC)
+        cfg = self.get_sensor_config(sensor_id)
         if cfg is None:
             return False
-        return 'baud' in cfg
+        # ARC is always enabled (computed sensor)
+        if sensor_id == SensorId.ARC:
+            return True
+        # For real sensors, check 'enabled' field (default True if missing for retrocompatibility)
+        return cfg.enabled is True
     
-    def get_all_sensors(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_sensors(self) -> Dict[SensorId, configSensorData]:
         """Get all sensor configurations."""
-        return self._config.get("sensors", {})
+        return self._config.sensors
     
-    def get_enabled_sensors(self) -> Dict[str, Dict[str, Any]]:
+    def get_enabled_sensors(self) -> Dict[SensorId, configSensorData]:
         """Get only sensors that represent real hardware (have a baud)."""
         all_sensors = self.get_all_sensors()
-        return {name: cfg for name, cfg in all_sensors.items() if isinstance(cfg, dict) and 'baud' in cfg}
+        for sensor in list(all_sensors.keys()):
+            if sensor != SensorId.ARC and all_sensors[sensor].enabled is not True:
+                all_sensors.pop(sensor)
+        return all_sensors
     
     def reload_config(self):
         """Reload configuration from file."""

@@ -4,6 +4,7 @@ import logging
 
 # Internal libs
 from core.event_hub import init_event_hub
+from core.models.sensor_enum import SensorId
 from core.services.serial_handler import serial_reader
 from core.services.sensor_manager import sensor_manager
 from core.services.test_manager import test_manager
@@ -41,65 +42,64 @@ class ServiceManager:
         if not emulation:
             # Get sensor baud rates from config — only include real hardware sensors
             sensor_bauds = {}
-            for sensor_name, sensor_config in config_loader.get_all_sensors().items():
+            for sensor_id, sensor_config in config_loader.get_all_sensors().items():
                 # If a sensor has no explicit 'baud' field, treat it as a virtual/calculated sensor
-                if "baud" in (sensor_config or {}):
-                    sensor_bauds[sensor_name] = sensor_config.get("baud", 9600)
+                sensor_bauds[sensor_id] = sensor_config.baud
             
             # Store detected sensor info for reconnection (baud may differ from config)
-            detected_sensor_info = {}  # sensor_name -> (port, baud)
+            detected_sensor_info = {}  # sensor_id -> (port, baud)
             missing_sensors_state = {}  # Track which sensors were missing (for state change logging)
             reconnection_failure_state = {}  # Track failed reconnection attempts (for state change logging)
             
             # Register reconnection callback
-            async def reconnect_sensor(sensor_name: str) -> bool:
+            async def reconnect_sensor(sensor_id: SensorId) -> bool:
                 """Attempt to reconnect a specific sensor."""
-                logger.info(f"Attempting to reconnect {sensor_name}...")
+                logger.info(f"Attempting to reconnect {sensor_id.name}...")
                 
                 # Use detected baud if available, otherwise use configured baud
-                baud_to_use = sensor_bauds[sensor_name]
-                if sensor_name in detected_sensor_info:
-                    old_port, detected_baud = detected_sensor_info[sensor_name]
+                baud_to_use = sensor_bauds[sensor_id]
+                if sensor_id in detected_sensor_info:
+                    old_port, detected_baud = detected_sensor_info[sensor_id]
                     baud_to_use = detected_baud
                 else:
                     old_port = None
                 
                 # Try to detect the sensor
                 detected = port_detector.auto_detect_sensors(
-                    {sensor_name: baud_to_use},
+                    {sensor_id: baud_to_use},
                     sensor_configs=config_loader.get_all_sensors(),
                     verbose=False
                 )
                 
-                if sensor_name in detected:
-                    sensor_info = detected[sensor_name]
-                    logger.info(f"✓ Re-detected {sensor_name} on {sensor_info.port} @ {sensor_info.baud} baud")
-                    detected_sensor_info[sensor_name] = (sensor_info.port, sensor_info.baud)
-                    reconnection_failure_state[sensor_name] = False  # Clear failure state
+                if sensor_id in detected:
+                    sensor_info = detected[sensor_id]
+                    logger.info(f"✓ Re-detected {sensor_id.name} on {sensor_info.port} @ {sensor_info.baud} baud")
+                    detected_sensor_info[sensor_id] = (sensor_info.port, sensor_info.baud)
+                    reconnection_failure_state[sensor_id] = False  # Clear failure state
                     
                     # Start serial reader for the reconnected sensor
                     task = loop.create_task(serial_reader(
+                        sensor_id=sensor_id,
                         port=sensor_info.port,
                         baudrate=sensor_info.baud,
-                        sensor_name=sensor_name
                     ))
                     # Store task for later cleanup if needed
                     if not hasattr(self, 'sensor_tasks_map'):
                         self.sensor_tasks_map = {}
-                    self.sensor_tasks_map[sensor_name] = task
+                    self.sensor_tasks_map[sensor_id] = task
                     return True
                 else:
                     # Only log warning on first failure, not on every retry
-                    was_failing = reconnection_failure_state.get(sensor_name, False)
+                    was_failing = reconnection_failure_state.get(sensor_id, False)
                     if not was_failing:
-                        logger.warning(f"✗ Could not re-detect {sensor_name}")
-                        reconnection_failure_state[sensor_name] = True
+                        logger.warning(f"✗ Could not re-detect {sensor_id.name}")
+                        reconnection_failure_state[sensor_id] = True
                     
                     # Remove old port from used_ports if the sensor was assigned to one
                     # This allows the port to be reassigned to another sensor
                     if old_port and old_port in port_detector.used_ports:
                         port_detector.used_ports.discard(old_port)
-                        logger.debug(f"Released port {old_port} from {sensor_name} for reuse")
+                        logger.debug(f"Released port {old_port} from {sensor_id.name} for reuse")
                     return False
             
             # Periodic detection of missing sensors
@@ -158,9 +158,9 @@ class ServiceManager:
                                 
                                 # Start serial reader
                                 task = loop.create_task(serial_reader(
+                                    sensor_id=sensor_to_detect,
                                     port=sensor_info.port,
                                     baudrate=sensor_info.baud,
-                                    sensor_name=sensor_to_detect
                                 ))
                                 if not hasattr(self, 'sensor_tasks_map'):
                                     self.sensor_tasks_map = {}
@@ -195,8 +195,8 @@ class ServiceManager:
             )
             
             # Track initial missing sensors
-            for sensor_name in sensor_bauds.keys():
-                missing_sensors_state[sensor_name] = sensor_name not in detected_sensors
+            for sensor_id in sensor_bauds.keys():
+                missing_sensors_state[sensor_id] = sensor_id not in detected_sensors
             
             if not detected_sensors:
                 logger.warning("No sensors detected initially. Waiting for connections...")
@@ -206,23 +206,23 @@ class ServiceManager:
                 if not hasattr(self, 'sensor_tasks_map'):
                     self.sensor_tasks_map = {}
                 
-                for sensor_name, sensor_info in detected_sensors.items():
-                    logger.info(f"Starting serial reader for {sensor_name}: {sensor_info.port} @ {sensor_info.baud} baud")
-                    detected_sensor_info[sensor_name] = (sensor_info.port, sensor_info.baud)
+                for sensor_id, sensor_info in detected_sensors.items():
+                    logger.info(f"Starting serial reader for {sensor_id}: {sensor_info.port} @ {sensor_info.baud} baud")
+                    detected_sensor_info[sensor_id] = (sensor_info.port, sensor_info.baud)
                     
                     # Add to health monitoring only if detected
-                    sensor_reconnection_manager.add_sensor(sensor_name, max_silence_time=5.0)
+                    sensor_reconnection_manager.add_sensor(sensor_id, max_silence_time=5.0)
                     
                     # Register reconnection callback
-                    sensor_reconnection_manager.register_reconnection_callback(sensor_name, reconnect_sensor)
+                    sensor_reconnection_manager.register_reconnection_callback(sensor_id, reconnect_sensor)
                     
                     task = loop.create_task(serial_reader(
+                        sensor_id=sensor_id,
                         port=sensor_info.port,
                         baudrate=sensor_info.baud,
-                        sensor_name=sensor_name
                     ))
                     self.serial_tasks.append(task)
-                    self.sensor_tasks_map[sensor_name] = task
+                    self.sensor_tasks_map[sensor_id] = task
             
             # Start periodic sensor detection task
             self.running = True

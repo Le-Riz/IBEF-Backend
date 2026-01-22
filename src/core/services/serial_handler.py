@@ -2,16 +2,17 @@ import asyncio
 from typing import Optional
 import serial
 from core.event_hub import event_hub
+from core.models.sensor_enum import SensorId
 
-async def serial_reader(port: str, baudrate: int = 9600, sensor_name: Optional[str] = None):
+async def serial_reader(sensor_id: SensorId, port: str, baudrate: int = 9600):
     """Read data from a serial port and publish it to the global event hub.
     
     Args:
         port (str): The serial port to connect to (e.g., "/dev/ttyUSB0" or "COM3").
         baudrate (int): The baud rate for the serial connection (default 9600).
-        sensor_name (str): Optional sensor name for logging and identification.
+        sensor_id (SensorId): Sensor identifier for logging and identification.
     """
-    sensor_label = f"{sensor_name} ({port})" if sensor_name else port
+    sensor_label = f"{sensor_id.name} ({port})" if sensor_id else port
     print(f"Trying to connect to {sensor_label} at {baudrate} baud...")
     try:
         # Open the serial port
@@ -22,7 +23,7 @@ async def serial_reader(port: str, baudrate: int = 9600, sensor_name: Optional[s
                 try:
                     line = ser.readline().decode('utf-8').strip()
                     if line:
-                        event_hub.send_all_on_topic("serial_data", line)
+                        event_hub.send_all_on_topic("serial_data", (sensor_id, line))
                 except UnicodeDecodeError:
                     print(f"Error decoding serial data from {sensor_label}")
             

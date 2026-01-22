@@ -217,8 +217,8 @@ class TestManager:
         self.graphique_arc_draw = ImageDraw.Draw(self.graphique_arc_image)
         self.graphique_arc_last_point = None
         # Draw axes on both
-        self._draw_graphique_axes('DISP_1')
-        self._draw_graphique_axes('ARC')
+        self._draw_graphique_axes(SensorId.DISP_1)
+        self._draw_graphique_axes(SensorId.ARC)
         
         self.is_running = True
         # Reset emulation clock when a real/recorded test starts
@@ -380,8 +380,8 @@ class TestManager:
         if int(rel_time * 10) % 20 == 0:  # Every 2 seconds
             logger.info(f"Graph values - DISP_1: {disp1_value:.3f}, ARC: {arc_value:.3f}, FORCE: {force_value:.3f}")
         
-        self._plot_point_on_graphique('DISP_1', disp1_value, force_value)
-        self._plot_point_on_graphique('ARC', arc_value, force_value)
+        self._plot_point_on_graphique(SensorId.DISP_1, disp1_value, force_value)
+        self._plot_point_on_graphique(SensorId.ARC, arc_value, force_value)
         
         # CSV Writing
         if self.csv_file:
@@ -460,24 +460,24 @@ class TestManager:
 
         return 0.0
 
-    def _draw_graphique_axes(self, sensor_name: str):
+    def _draw_graphique_axes(self, sensor_id: SensorId):
         """Draw X and Y axes on the graphique with labels and units.
         
         Args:
-            sensor_name: Either 'DISP_1' or 'ARC' to determine which graphique to draw on
+            sensor_id: Either 'DISP_1' or 'ARC' to determine which graphique to draw on
         """
         # Use config values when available (display_name and max)
-        sensor_cfg = config_loader.get_sensor_config(sensor_name) or {}
-        display_name = sensor_cfg.get("display_name", sensor_name)
+        sensor_cfg = config_loader.get_sensor_config(sensor_id)
+        display_name = sensor_cfg.displayName
         x_label = f"{display_name}"
 
-        if sensor_name == 'DISP_1':
+        if sensor_id == SensorId.DISP_1:
             draw = self.graphique_disp1_draw
-            x_max = float(sensor_cfg.get("max", 15.0))
+            x_max = sensor_cfg.max
             x_min = 0.0
-        elif sensor_name == 'ARC':
+        elif sensor_id == SensorId.ARC:
             draw = self.graphique_arc_draw
-            x_max = float(sensor_cfg.get("max", 5.0))
+            x_max = sensor_cfg.max
             x_min = -5.0
         else:
             return
@@ -519,11 +519,11 @@ class TestManager:
         
         # Draw ticks and labels on X axis
         tick_size = 10
-        tick_interval = 2 if sensor_name == 'ARC' else 3  # ARC: every 2, DISP_1: every 3
+        tick_interval = 2 if sensor_id == SensorId.ARC else 3  # ARC: every 2, DISP_1: every 3
         x_range = x_max - x_min
         
         # Generate tick values based on range
-        if sensor_name == 'ARC':
+        if sensor_id == SensorId.ARC:
             tick_values = range(int(x_min), int(x_max) + 1, tick_interval)
         else:
             tick_values = range(int(x_min), int(x_max) + 1, tick_interval)
@@ -574,8 +574,8 @@ class TestManager:
         )
         
         # Draw ticks and labels on Y axis using FORCE config
-        force_cfg = config_loader.get_sensor_config("FORCE") or {}
-        force_max = float(force_cfg.get("max", 1000.0))
+        force_cfg = config_loader.get_sensor_config(SensorId.FORCE) or {}
+        force_max = float(force_cfg.max)
         force_interval = max(int(force_max // 5), 1)  # 5 ticks by default
         
         for force_val in range(0, int(force_max) + 1, force_interval):
@@ -596,19 +596,18 @@ class TestManager:
             )
         
         # Y axis label (use display_name if provided)
-        force_label = force_cfg.get("display_name", "FORCE")
         draw.text(
             (15, 10),
-            force_label,
+            force_cfg.displayName,
             fill=text_color,
             font=font
         )
 
-    def _plot_point_on_graphique(self, sensor_name: str, x_value: float, force: float):
+    def _plot_point_on_graphique(self, sensor_id: SensorId, x_value: float, force: float):
         """Add a point to the graphique (X=sensor_value, Y=FORCE) and draw line to previous point.
         
         Args:
-            sensor_name: Either 'DISP_1' or 'ARC' to determine which graphique to plot on
+            sensor_id: Either SensorId.DISP_1 or SensorId.ARC to determine which graphique to plot on
             x_value: The X-axis value (DISP_1 or ARC value)
             force: The Y-axis value (FORCE)
         """
@@ -616,16 +615,16 @@ class TestManager:
             return
         
         # Select appropriate graphique and ranges from config
-        sensor_cfg = config_loader.get_sensor_config(sensor_name) or {}
-        if sensor_name == 'DISP_1':
+        sensor_cfg = config_loader.get_sensor_config(sensor_id) or {}
+        if sensor_id == SensorId.DISP_1:
             draw = self.graphique_disp1_draw
             last_point = self.graphique_disp1_last_point
-            x_max = float(sensor_cfg.get('max', 15.0))
-            x_min = float(sensor_cfg.get('min', 0.0)) if 'min' in sensor_cfg else 0.0
-        elif sensor_name == 'ARC':
+            x_max = sensor_cfg.max
+            x_min = 0.0
+        elif sensor_id == SensorId.ARC:
             draw = self.graphique_arc_draw
             last_point = self.graphique_arc_last_point
-            arc_max = float(sensor_cfg.get('max', 5.0))
+            arc_max = sensor_cfg.max
             x_max = arc_max
             x_min = -arc_max
         else:
@@ -635,8 +634,8 @@ class TestManager:
             return
         
         # Scaling parameters (force range from config)
-        force_cfg = config_loader.get_sensor_config("FORCE") or {}
-        force_max = float(force_cfg.get('max', 1000.0))
+        force_cfg = config_loader.get_sensor_config(SensorId.FORCE) or {}
+        force_max = force_cfg.max
         x_range = x_max - x_min
         
         # Convert data to pixel coordinates
@@ -660,7 +659,7 @@ class TestManager:
             )
         
         # Update last point
-        if sensor_name == 'DISP_1':
+        if sensor_id == SensorId.DISP_1:
             self.graphique_disp1_last_point = current_point
         else:
             self.graphique_arc_last_point = current_point

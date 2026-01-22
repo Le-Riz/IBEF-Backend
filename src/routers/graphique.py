@@ -2,6 +2,7 @@ from fastapi import APIRouter, Path, HTTPException
 from fastapi.responses import StreamingResponse
 import io
 import base64
+from core.models.sensor_enum import SensorId
 from core.services.test_manager import test_manager
 from core.sensor_reconnection import sensor_reconnection_manager
 
@@ -43,15 +44,15 @@ async def get_graphique(
     
     # For DISP_1 X-axis, check DISP_1 connection
     if sensor_name == 'DISP_1':
-        if not sensor_reconnection_manager.is_sensor_connected('DISP_1'):
+        if not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_1):
             raise HTTPException(status_code=503, detail="Sensor DISP_1 is not connected")
     # For ARC X-axis, check DISP_2 and DISP_3 connection (ARC is calculated from DISP_2, DISP_3)
     else:  # sensor_name == 'ARC'
-        if not sensor_reconnection_manager.is_sensor_connected('DISP_2') or not sensor_reconnection_manager.is_sensor_connected('DISP_3'):
+        if not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_2) or not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_3):
             raise HTTPException(status_code=503, detail="Sensors DISP_2 and DISP_3 are not connected (required for ARC calculation)")
     
     # Also check FORCE connection (Y-axis)
-    if not sensor_reconnection_manager.is_sensor_connected('FORCE'):
+    if not sensor_reconnection_manager.is_sensor_connected(SensorId.FORCE):
         raise HTTPException(status_code=503, detail="Sensor FORCE is not connected")
     
     png_data = test_manager.get_graphique_png(sensor_name)
@@ -79,6 +80,14 @@ async def get_graphique(
                 "example": {"detail": "Sensor FORCE is not connected"}
             }
         }
+    },
+    409: {
+        "description": "No test is currently running.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "No test is currently running."}
+            }
+        }
     }
 })
 async def get_graphique_base64(
@@ -98,16 +107,19 @@ async def get_graphique_base64(
     
     # For DISP_1 X-axis, check DISP_1 connection
     if sensor_name == 'DISP_1':
-        if not sensor_reconnection_manager.is_sensor_connected('DISP_1'):
+        if not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_1):
             raise HTTPException(status_code=503, detail="Sensor DISP_1 is not connected")
     # For ARC X-axis, check DISP_2 and DISP_3 connection (ARC is calculated from DISP_2, DISP_3)
     else:  # sensor_name == 'ARC'
-        if not sensor_reconnection_manager.is_sensor_connected('DISP_2') or not sensor_reconnection_manager.is_sensor_connected('DISP_3'):
+        if not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_2) or not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_3):
             raise HTTPException(status_code=503, detail="Sensors DISP_2 and DISP_3 are not connected (required for ARC calculation)")
     
     # Also check FORCE connection (Y-axis)
-    if not sensor_reconnection_manager.is_sensor_connected('FORCE'):
+    if not sensor_reconnection_manager.is_sensor_connected(SensorId.FORCE):
         raise HTTPException(status_code=503, detail="Sensor FORCE is not connected")
+    
+    if not test_manager.get_test_state() == "RUNNING":
+        raise HTTPException(status_code=409, detail=f"No test is currently running.")
     
     png_data = test_manager.get_graphique_png(sensor_name)
     base64_data = base64.b64encode(png_data).decode('utf-8')

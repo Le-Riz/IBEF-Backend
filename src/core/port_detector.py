@@ -6,13 +6,16 @@ import logging
 from typing import Dict, Optional, List
 from dataclasses import dataclass
 
+from core.models.config_data import configSensorData
+from core.models.sensor_enum import SensorId
+
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class DetectedSensor:
     """Represents a detected sensor on a serial port."""
-    sensor_name: str  # e.g., "FORCE", "DISP_1"
+    sensor_name: SensorId  # e.g., "FORCE", "DISP_1"
     port: str  # e.g., "/dev/ttyUSB0"
     baud: int  # Detected baud rate
     confidence: float  # 0.0-1.0, how confident we are about the detection
@@ -132,7 +135,7 @@ class PortDetector:
         
         return None
     
-    def auto_detect_sensors(self, sensor_bauds: Dict[str, int], sensor_configs: Dict[str, Dict] = None, verbose: bool = True) -> Dict[str, DetectedSensor]:
+    def auto_detect_sensors(self, sensor_bauds: Dict[SensorId, int], sensor_configs: Dict[SensorId, configSensorData], verbose: bool = True) -> Dict[SensorId, DetectedSensor]:
         """
         Automatically detect all sensors connected to the system.
         
@@ -154,44 +157,62 @@ class PortDetector:
         detected = {}
         local_used_ports = set(self.used_ports)  # Copy persistent used_ports
         disp_count = 0  # Counter for DISP sensors found
-        max_disp = max(0, sum(1 for name in sensor_bauds if name.startswith("DISP")))
+        max_disp = max(0, sum(1 for name in sensor_bauds if (
+            name == SensorId.DISP_1 or
+            name == SensorId.DISP_2 or
+            name == SensorId.DISP_3 or
+            name == SensorId.DISP_4 or
+            name == SensorId.DISP_5
+        )))
         
         # Single pass: try each port with each sensor's configured baud only
         for port in available_ports:
             if port in local_used_ports:
                 continue
             
-            for sensor_name, baud in sensor_bauds.items():
+            for sensor_id, baud in sensor_bauds.items():
                 # Skip DISP sensors we've already found enough of
-                if sensor_name.startswith("DISP") and max_disp and disp_count >= max_disp:
+                if (sensor_id == SensorId.DISP_1 or
+                    sensor_id == SensorId.DISP_2 or
+                    sensor_id == SensorId.DISP_3 or
+                    sensor_id == SensorId.DISP_4 or
+                    sensor_id == SensorId.DISP_5) and max_disp and disp_count >= max_disp:
                     continue
                 
                 # Skip if this sensor is already detected
-                if sensor_name in detected:
+                if sensor_id in detected:
                     continue
                 
                 # Get expected sender_id for DISP sensors from config
                 expected_sender_id = None
-                if sensor_name.startswith("DISP") and sensor_configs and sensor_name in sensor_configs:
-                    expected_sender_id = sensor_configs[sensor_name].get("sender_id")
+                if (sensor_id == SensorId.DISP_1 or
+                    sensor_id == SensorId.DISP_2 or
+                    sensor_id == SensorId.DISP_3 or
+                    sensor_id == SensorId.DISP_4 or
+                    sensor_id == SensorId.DISP_5) and sensor_configs and sensor_id in sensor_configs:
+                    expected_sender_id = sensor_configs[sensor_id].senderId
                 
                 sensor_type = self.probe_sensor(port, baud, expected_sender_id=expected_sender_id)
                 
-                if sensor_type == "FORCE" and sensor_name == "FORCE":
-                    detected[sensor_name] = DetectedSensor(
-                        sensor_name=sensor_name,
+                if sensor_type == "FORCE" and sensor_id == SensorId.FORCE:
+                    detected[sensor_id] = DetectedSensor(
+                        sensor_name=sensor_id,
                         port=port,
                         baud=baud,
                         confidence=0.95
                     )
                     local_used_ports.add(port)
                     if verbose:
-                        logger.info(f"✓ Detected {sensor_name} on {port} @ {baud} baud")
+                        logger.info(f"✓ Detected {sensor_id.name} on {port} @ {baud} baud")
                     break
                 
-                elif sensor_type == "DISP" and sensor_name.startswith("DISP"):
-                    detected[sensor_name] = DetectedSensor(
-                        sensor_name=sensor_name,
+                elif sensor_type == "DISP" and (sensor_id == SensorId.DISP_1 or
+                                                  sensor_id == SensorId.DISP_2 or
+                                                  sensor_id == SensorId.DISP_3 or
+                                                  sensor_id == SensorId.DISP_4 or
+                                                  sensor_id == SensorId.DISP_5):
+                    detected[sensor_id] = DetectedSensor(
+                        sensor_name=sensor_id,
                         port=port,
                         baud=baud,
                         confidence=0.90
@@ -199,7 +220,7 @@ class PortDetector:
                     local_used_ports.add(port)
                     disp_count += 1
                     if verbose:
-                        logger.info(f"✓ Detected {sensor_name} on {port} @ {baud} baud")
+                        logger.info(f"✓ Detected {sensor_id.name} on {port} @ {baud} baud")
                     break
         
         # Update persistent state
@@ -209,13 +230,13 @@ class PortDetector:
         
         if verbose:
             logger.info(f"Sensor detection complete. Found {len(detected)} sensors:")
-            for sensor_name, sensor in detected.items():
-                logger.info(f"  - {sensor_name}: {sensor.port} @ {sensor.baud} baud (confidence: {sensor.confidence:.0%})")
+            for sensor_id, sensor in detected.items():
+                logger.info(f"  - {sensor_id.name}: {sensor.port} @ {sensor.baud} baud (confidence: {sensor.confidence:.0%})")
         
         # Warn about missing sensors (only if verbose)
         missing_sensors = set(sensor_bauds.keys()) - set(detected.keys())
         if missing_sensors and verbose:
-            missing_list = ", ".join(sorted(missing_sensors))
+            missing_list = ", ".join(sorted(sensor.name for sensor in missing_sensors))
             logger.warning(f"The following configured sensors were not detected (they may not be connected): {missing_list}")
         
         return detected

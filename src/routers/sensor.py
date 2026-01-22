@@ -91,7 +91,7 @@ async def get_sensor_data(sensor_id: str) -> Point:
         )
 
     # Check sensor connection status
-    if not sensor_reconnection_manager.is_sensor_connected(sensor_id.upper()):
+    if not sensor_reconnection_manager.is_sensor_connected(sid):
         raise HTTPException(
             status_code=503,
             detail=f"Sensor {sensor_id.upper()} is not connected"
@@ -148,7 +148,7 @@ async def get_sensor_data_history(sensor_id: str, window: int = 30) -> PointsLis
         )
 
     # Check sensor connection status
-    if not sensor_reconnection_manager.is_sensor_connected(sensor_id.upper()):
+    if not sensor_reconnection_manager.is_sensor_connected(SensorId[sensor_id.upper()]):
         raise HTTPException(
             status_code=503,
             detail=f"Sensor {sensor_id.upper()} is not connected"
@@ -206,10 +206,10 @@ async def get_sensor_raw_data(sensor_id: str) -> Point:
         )
 
     # Check sensor connection status
-    if not sensor_reconnection_manager.is_sensor_connected(sensor_id.upper()):
+    if not sensor_reconnection_manager.is_sensor_connected(sid):
         raise HTTPException(
             status_code=503,
-            detail=f"Sensor {sensor_id.upper()} is not connected"
+            detail=f"Sensor {sid.name} is not connected"
         )
 
     idx = sid.value
@@ -252,7 +252,7 @@ async def get_sensor_zero_offset(sensor_id: str) -> OffsetResponse:
         )
 
     # Check sensor connection status
-    if not sensor_reconnection_manager.is_sensor_connected(sensor_id.upper()):
+    if not sensor_reconnection_manager.is_sensor_connected(sensor):
         raise HTTPException(
             status_code=503,
             detail=f"Sensor {sensor_id.upper()} is not connected"
@@ -295,10 +295,10 @@ async def zero_sensor(sensor_id: str) -> None:
         )
     
     # Check sensor connection status
-    if not sensor_reconnection_manager.is_sensor_connected(sensor_id.upper()):
+    if not sensor_reconnection_manager.is_sensor_connected(sensor):
         raise HTTPException(
             status_code=503,
-            detail=f"Sensor {sensor_id.upper()} is not connected"
+            detail=f"Sensor {sensor.name} is not connected"
         )
     
     # Send command to sensor manager via event hub
