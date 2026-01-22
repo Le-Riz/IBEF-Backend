@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Path, HTTPException
+from fastapi import APIRouter, Path, HTTPException, logger
 from fastapi.responses import StreamingResponse
 import io
 import base64
 from core.models.sensor_enum import SensorId
+from core.models.test_state import TestState
 from core.services.test_manager import test_manager
 from core.sensor_reconnection import sensor_reconnection_manager
 
@@ -23,6 +24,14 @@ router = APIRouter(prefix="/graph", tags=["graph"])
         "content": {
             "application/json": {
                 "example": {"detail": "Sensor FORCE is not connected"}
+            }
+        }
+    },
+    409: {
+        "description": "No test is currently running.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "No test is currently running."}
             }
         }
     }
@@ -54,6 +63,10 @@ async def get_graphique(
     # Also check FORCE connection (Y-axis)
     if not sensor_reconnection_manager.is_sensor_connected(SensorId.FORCE):
         raise HTTPException(status_code=503, detail="Sensor FORCE is not connected")
+    
+    if not test_manager.get_test_state() == TestState.RUNNING:
+        raise HTTPException(status_code=409, detail=f"No test is currently running.")
+    
     
     png_data = test_manager.get_graphique_png(sensor_name)
     
@@ -118,7 +131,7 @@ async def get_graphique_base64(
     if not sensor_reconnection_manager.is_sensor_connected(SensorId.FORCE):
         raise HTTPException(status_code=503, detail="Sensor FORCE is not connected")
     
-    if not test_manager.get_test_state() == "RUNNING":
+    if not test_manager.get_test_state() == TestState.RUNNING:
         raise HTTPException(status_code=409, detail=f"No test is currently running.")
     
     png_data = test_manager.get_graphique_png(sensor_name)
