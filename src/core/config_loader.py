@@ -1,10 +1,10 @@
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict
 
 from core.models.sensor_enum import SensorId
-from core.models.config_data import configData, configSensorData
+from core.models.config_data import calculatedConfigSensorData, configData, configSensorData, defaultConfigSensorData
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class ConfigLoader:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(ConfigLoader, cls).__new__(cls)
-            cls._instance._config = {}
+            cls._instance._config = configData(sensors={}, emulation=True)
             cls._instance._initialized = False
         return cls._instance
     
@@ -51,13 +51,36 @@ class ConfigLoader:
                 for sensor_key, sensor_cfg in json_data.get("sensors", {}).items():
                     sensor_id = SensorId[sensor_key]
                     self._config.sensors[sensor_id] = configSensorData(
+                        sensor_id,
                         baud=sensor_cfg.get("baud", 9600),
                         description=sensor_cfg.get("description", ""),
                         displayName=sensor_cfg.get("display_name", ""),
-                        senderId=sensor_cfg.get("sender_id", ""),
+                        serialId=sensor_cfg.get("serial_id", ""),
                         max=sensor_cfg.get("max", 0.0),
                         enabled=sensor_cfg.get("enabled", True)
                     )
+                
+                for sensor_key, sensor_cfg in json_data.get("calculated_sensors", {}).items():
+                    sensor_id = SensorId[sensor_key]
+                    calculated_sensor = calculatedConfigSensorData(
+                        sensor_id,
+                        description=sensor_cfg.get("description", ""),
+                        displayName=sensor_cfg.get("display_name", ""),
+                        max=sensor_cfg.get("max", 0.0),
+                        dependencies=[]
+                    )
+                    for dep_key in sensor_cfg.get("dependencies", []):
+                        dep_id = SensorId[dep_key]
+                        if dep_id in self._config.sensors:
+                            dep_sensor = self._config.sensors[dep_id]
+                            if isinstance(dep_sensor, configSensorData):
+                                calculated_sensor.dependencies.append(
+                                    dep_sensor
+                                )
+                        else:
+                            logger.warning(f"Dependency sensor {dep_key} for {sensor_key} not found in config.")
+                    self._config.sensors[sensor_id] = calculated_sensor
+                
                 self._config.emulation = json_data.get("emulation", True)
             logger.info(f"Configuration loaded from {config_path}")
             
@@ -76,12 +99,13 @@ class ConfigLoader:
         return configData(
             emulation=True,
             sensors={
-                SensorId.FORCE: configSensorData(baud=115200, description="", displayName="", senderId="", max=0.0, enabled=True),
-                SensorId.DISP_1: configSensorData(baud=9600, description="", displayName="", senderId="", max=0.0, enabled=True),
-                SensorId.DISP_2: configSensorData(baud=9600, description="", displayName="", senderId="", max=0.0, enabled=False),
-                SensorId.DISP_3: configSensorData(baud=9600, description="", displayName="", senderId="", max=0.0, enabled=False),
-                SensorId.DISP_4: configSensorData(baud=9600, description="", displayName="", senderId="", max=0.0, enabled=False),
-                SensorId.DISP_5: configSensorData(baud=9600, description="", displayName="", senderId="", max=0.0, enabled=False),
+                SensorId.FORCE: configSensorData(SensorId.FORCE, baud=115200, description="", displayName="", serialId="", max=0.0, enabled=True),
+                SensorId.DISP_1: configSensorData(SensorId.DISP_1, baud=9600, description="", displayName="", serialId="", max=0.0, enabled=True),
+                SensorId.DISP_2: configSensorData(SensorId.DISP_2, baud=9600, description="", displayName="", serialId="", max=0.0, enabled=False),
+                SensorId.DISP_3: configSensorData(SensorId.DISP_3, baud=9600, description="", displayName="", serialId="", max=0.0, enabled=False),
+                SensorId.DISP_4: configSensorData(SensorId.DISP_4, baud=9600, description="", displayName="", serialId="", max=0.0, enabled=False),
+                SensorId.DISP_5: configSensorData(SensorId.DISP_5, baud=9600, description="", displayName="", serialId="", max=0.0, enabled=False),
+                SensorId.ARC: calculatedConfigSensorData(SensorId.ARC, description="", displayName="", max=0.0, dependencies=[]),
             }
         )
     
@@ -89,39 +113,41 @@ class ConfigLoader:
         """Get the emulation mode setting."""
         return self._config.emulation
     
-    def get_sensor_config(self, sensor_id: SensorId) -> configSensorData:
+    def get_sensor_config(self, sensor_id: SensorId) -> defaultConfigSensorData:
         """Get configuration for a specific sensor."""
         return self._config.sensors[sensor_id]
     
     def get_sensor_baud(self, sensor_id: SensorId) -> int:
         """Get the baud rate for a specific sensor."""
         sensor_config = self.get_sensor_config(sensor_id)
-        if sensor_config:
+        if sensor_config and isinstance(sensor_config, configSensorData):
             return sensor_config.baud
-        return 9600
+        return 115200
     
     def is_sensor_enabled(self, sensor_id: SensorId) -> bool:
         """
         Check if a sensor is enabled in configuration (enabled: true, except ARC).
         """
         cfg = self.get_sensor_config(sensor_id)
-        if cfg is None:
-            return False
-        # ARC is always enabled (computed sensor)
-        if sensor_id == SensorId.ARC:
+        if isinstance(cfg, configSensorData):
+            return cfg.enabled is True
+        
+        elif isinstance(cfg, calculatedConfigSensorData):
+            for calc_sensor in cfg.dependencies:
+                if not self.is_sensor_enabled(calc_sensor.id):
+                    return False
             return True
-        # For real sensors, check 'enabled' field (default True if missing for retrocompatibility)
-        return cfg.enabled is True
+        return False
     
-    def get_all_sensors(self) -> Dict[SensorId, configSensorData]:
+    def get_all_sensors(self) -> Dict[SensorId, defaultConfigSensorData]:
         """Get all sensor configurations."""
         return self._config.sensors
     
-    def get_enabled_sensors(self) -> Dict[SensorId, configSensorData]:
+    def get_enabled_sensors(self) -> Dict[SensorId, defaultConfigSensorData]:
         """Get only sensors that represent real hardware (have a baud)."""
         all_sensors = self.get_all_sensors()
         for sensor in list(all_sensors.keys()):
-            if sensor != SensorId.ARC and all_sensors[sensor].enabled is not True:
+            if self.is_sensor_enabled(sensor) is not True:
                 all_sensors.pop(sensor)
         return all_sensors
     

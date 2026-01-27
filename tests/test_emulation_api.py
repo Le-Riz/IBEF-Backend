@@ -2,7 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from src.main import app
-from core.sensor_reconnection import sensor_reconnection_manager
+from core.services.sensor_manager import sensor_manager
 
 
 @pytest.fixture
@@ -16,9 +16,7 @@ class TestAPIEndpointsInEmulation:
     
     def test_sensor_data_endpoint_returns_200_in_emulation(self, client):
         """Test that /api/sensor/{sensor_id}/data returns 200 in emulation mode."""
-        # Ensure emulation mode is enabled
-        sensor_reconnection_manager.emulation_mode = True
-        
+        # En mode émulation, tous les capteurs sont censés être connectés
         for sensor_id in ["FORCE", "DISP_1", "DISP_2", "DISP_3", "DISP_4", "DISP_5"]:
             response = client.get(f"/api/sensor/{sensor_id}/data")
             assert response.status_code == 200, \
@@ -26,8 +24,6 @@ class TestAPIEndpointsInEmulation:
     
     def test_sensor_raw_endpoint_returns_200_in_emulation(self, client):
         """Test that /api/sensor/{sensor_id}/raw returns 200 in emulation mode."""
-        sensor_reconnection_manager.emulation_mode = True
-        
         for sensor_id in ["FORCE", "DISP_1", "DISP_2", "DISP_3", "DISP_4", "DISP_5"]:
             response = client.get(f"/api/sensor/{sensor_id}/raw")
             assert response.status_code == 200, \
@@ -35,8 +31,6 @@ class TestAPIEndpointsInEmulation:
         
     def test_never_returns_503_in_emulation(self, client):
         """Test that no data endpoints return 503 in emulation mode."""
-        sensor_reconnection_manager.emulation_mode = True
-        
         endpoints = [
             "/api/sensor/FORCE/data",
             "/api/sensor/DISP_1/data",
@@ -48,7 +42,6 @@ class TestAPIEndpointsInEmulation:
             "/api/graph/ARC/base64",
             "/api/raw/point/FORCE",
         ]
-        
         for endpoint in endpoints:
             response = client.get(endpoint)
             assert response.status_code != 503, \

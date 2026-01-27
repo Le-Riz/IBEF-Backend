@@ -5,7 +5,7 @@ import base64
 from core.models.sensor_enum import SensorId
 from core.models.test_state import TestState
 from core.services.test_manager import test_manager
-from core.sensor_reconnection import sensor_reconnection_manager
+from core.services.sensor_manager import sensor_manager
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -53,15 +53,15 @@ async def get_graphique(
     
     # For DISP_1 X-axis, check DISP_1 connection
     if sensor_name == 'DISP_1':
-        if not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_1):
+        if not sensor_manager.is_sensor_connected(SensorId.DISP_1):
             raise HTTPException(status_code=503, detail="Sensor DISP_1 is not connected")
     # For ARC X-axis, check DISP_2 and DISP_3 connection (ARC is calculated from DISP_2, DISP_3)
     else:  # sensor_name == 'ARC'
-        if not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_2) or not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_3):
+        if not sensor_manager.is_sensor_connected(SensorId.DISP_2) or not sensor_manager.is_sensor_connected(SensorId.DISP_3):
             raise HTTPException(status_code=503, detail="Sensors DISP_2 and DISP_3 are not connected (required for ARC calculation)")
     
     # Also check FORCE connection (Y-axis)
-    if not sensor_reconnection_manager.is_sensor_connected(SensorId.FORCE):
+    if not sensor_manager.is_sensor_connected(SensorId.FORCE):
         raise HTTPException(status_code=503, detail="Sensor FORCE is not connected")
     
     if not test_manager.get_test_state() == TestState.RUNNING:
@@ -120,15 +120,15 @@ async def get_graphique_base64(
     
     # For DISP_1 X-axis, check DISP_1 connection
     if sensor_name == 'DISP_1':
-        if not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_1):
+        if not sensor_manager.is_sensor_connected(SensorId.DISP_1):
             raise HTTPException(status_code=503, detail="Sensor DISP_1 is not connected")
     # For ARC X-axis, check DISP_2 and DISP_3 connection (ARC is calculated from DISP_2, DISP_3)
     else:  # sensor_name == 'ARC'
-        if not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_2) or not sensor_reconnection_manager.is_sensor_connected(SensorId.DISP_3):
+        if not sensor_manager.is_sensor_connected(SensorId.DISP_2) or not sensor_manager.is_sensor_connected(SensorId.DISP_3):
             raise HTTPException(status_code=503, detail="Sensors DISP_2 and DISP_3 are not connected (required for ARC calculation)")
     
     # Also check FORCE connection (Y-axis)
-    if not sensor_reconnection_manager.is_sensor_connected(SensorId.FORCE):
+    if not sensor_manager.is_sensor_connected(SensorId.FORCE):
         raise HTTPException(status_code=503, detail="Sensor FORCE is not connected")
     
     if not test_manager.get_test_state() == TestState.RUNNING:

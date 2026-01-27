@@ -2,12 +2,9 @@ import pytest
 import asyncio
 import time
 from core.models.sensor_enum import SensorId
-from core.sensor_reconnection import (
-    SensorHealthMonitor, 
-    SensorReconnectionManager,
-    SensorState,
-    sensor_reconnection_manager
-)
+from core.sensor_reconnection import SensorState
+from core.sensor_reconnection import SensorHealthMonitor
+
 
 
 class TestSensorHealthMonitor:
@@ -71,87 +68,4 @@ class TestSensorHealthMonitor:
         assert monitor.current_backoff_delay <= 5.0
 
 
-class TestSensorReconnectionManager:
-    """Test sensor reconnection manager."""
-    
-    def test_singleton_pattern(self):
-        """Test manager is singleton."""
-        mgr1 = SensorReconnectionManager()
-        mgr2 = SensorReconnectionManager()
-        assert mgr1 is mgr2
-    
-    def test_add_sensor(self):
-        """Test adding sensors to monitor."""
-        mgr = SensorReconnectionManager()
-        mgr.add_sensor(SensorId.FORCE, max_silence_time=5.0)
-        
-        assert SensorId.FORCE in mgr.monitors
-        assert mgr.monitors[SensorId.FORCE].sensor_id == SensorId.FORCE
-    
-    def test_record_sensor_data(self):
-        """Test recording data for a sensor."""
-        mgr = SensorReconnectionManager()
-        mgr.add_sensor(SensorId.DISP_1, max_silence_time=5.0)
-        
-        monitor = mgr.monitors[SensorId.DISP_1]
-        old_time = monitor.last_data_time
-        time.sleep(0.1)
-        
-        mgr.record_sensor_data(SensorId.DISP_1)
-        
-        assert monitor.last_data_time > old_time
-    
-    def test_get_sensor_status(self):
-        """Test getting sensor status."""
-        mgr = SensorReconnectionManager()
-        mgr.add_sensor(SensorId.FORCE, max_silence_time=5.0)
-        
-        status = mgr.get_sensor_status(SensorId.FORCE)
-        assert status is not None
-        assert status.sensor_id == SensorId.FORCE
-        assert status.state == SensorState.CONNECTED
-    
-    def test_get_all_statuses(self):
-        """Test getting status of all sensors."""
-        mgr = SensorReconnectionManager()
-        mgr.add_sensor(SensorId.DISP_2)
-        mgr.add_sensor(SensorId.DISP_3)
-        
-        statuses = mgr.get_all_statuses()
-        assert len(statuses) >= 2
-        assert SensorId.DISP_2 in statuses
-        assert SensorId.DISP_3 in statuses
-    
-    def test_register_callback(self):
-        """Test registering reconnection callback."""
-        mgr = SensorReconnectionManager()
-        
-        async def dummy_callback(sensor_name: str) -> bool:
-            return True
-        
-        mgr.register_reconnection_callback(SensorId.DISP_5, dummy_callback)
-        assert SensorId.DISP_5 in mgr.reconnection_callbacks
-
-
-class TestReconnectionFlow:
-    """Test complete reconnection flow."""
-    
-    @pytest.mark.asyncio
-    async def test_silence_detection_triggers_disconnect(self):
-        """Test that prolonged silence triggers disconnect."""
-        mgr = SensorReconnectionManager()
-        mgr.add_sensor(SensorId.FORCE, max_silence_time=0.2)
-        
-        # Initially connected
-        monitor = mgr.monitors[SensorId.FORCE]
-        assert monitor.state == SensorState.CONNECTED
-        
-        # Wait for silence to be detected
-        await asyncio.sleep(0.3)
-        
-        # Manually trigger the monitor tick
-        await mgr._monitor_tick()
-        
-        # Should be disconnected now
-        assert monitor.state == SensorState.DISCONNECTED
 

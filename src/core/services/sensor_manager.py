@@ -9,9 +9,11 @@ from core.config_loader import config_loader
 from core.models.sensor_data import SensorData
 from core.models.sensor_enum import SensorId
 from core.event_hub import event_hub
-from core.sensor_reconnection import sensor_reconnection_manager
+from core.sensor_reconnection import SensorTask
+from core.services.serial_handler import create_serial_sensor_task
 
 logger = logging.getLogger(__name__)
+PORT_PREFIX = "/dev/serial/by-id/"
 
 class SensorManager:
     """
@@ -20,25 +22,16 @@ class SensorManager:
     def __init__(self):
         self.running = False
         self.emulation_mode = False
-        # Store current sensor values: List indexed by SensorId.value
         self.sensors: list[float] = [0.0 for _ in SensorId]
         self._thread: Optional[threading.Thread] = None
-        self.motion_sensor_map: Dict[str, SensorId] = {}
-        # Store offsets: List indexed by SensorId.value
         self.offsets: list[float] = [0.0 for _ in SensorId]
-
-        # Preload mappings from configuration if present
-        self._load_motion_sensor_mapping()
-        
-        # Subscribe to serial data from the global handler
-        # Note: The handler signature for PubSubHub is (topic, message)
+        self._sensor_tasks: Dict[SensorId, SensorTask] = {}
         event_hub.subscribe("serial_data", self._on_serial_data)
         event_hub.subscribe("sensor_command", self._on_command)
 
-    def start(self, emulation=False):
-        """Start sensor data acquisition."""
+    def start(self, emulation=False, sensor_ports: Optional[Dict[SensorId, tuple[str, int]]] = None):
+        """Start sensor data acquisition. If not in emulation, expects sensor_ports: Dict[SensorId, (port, baud)]"""
         if self.running:
-            # If already running, check if mode changed
             if self.emulation_mode != emulation:
                 self.stop()
             else:
@@ -51,6 +44,18 @@ class SensorManager:
         if self.emulation_mode:
             self._thread = threading.Thread(target=self._loop, daemon=True)
             self._thread.start()
+        else:
+            # Launch a SensorTask for each real sensor
+            if sensor_ports is None:
+                raise ValueError("sensor_ports must be provided in hardware mode")
+            for sensor_id, (port, baud) in sensor_ports.items():
+                if port == "":
+                    logger.warning(f"Sensor {sensor_id} has no assigned port, skipping...")
+                    continue
+                full_port = PORT_PREFIX + port
+                task = create_serial_sensor_task(sensor_id, full_port, baud)
+                task.start()
+                self._sensor_tasks[sensor_id] = task
 
     def set_mode(self, emulation: bool):
         """Set the operation mode (emulation or real hardware)."""
@@ -60,12 +65,35 @@ class SensorManager:
         else:
             self.emulation_mode = emulation
 
+    def is_sensor_connected(self, sensor_id: SensorId) -> bool:
+        """
+        Check if a sensor is currently connected.
+        Handles ARC and emulation logic.
+        """
+        # Emulation mode: enabled in config = connected
+        if self.emulation_mode:
+            
+            return config_loader.is_sensor_enabled(sensor_id)
+        
+        # Hardware mode: check if we have a running SensorTask
+        if sensor_id.name == "ARC":
+            return (
+                self.is_sensor_connected(SensorId.DISP_1)
+                and self.is_sensor_connected(SensorId.DISP_2)
+                and self.is_sensor_connected(SensorId.DISP_3)
+            )
+        return sensor_id in self._sensor_tasks and self._sensor_tasks[sensor_id].is_connected()
+    
     def stop(self):
         """Stop sensor data acquisition."""
         self.running = False
         if self._thread:
             self._thread.join()
             self._thread = None
+        # Stop all sensor tasks
+        for task in self._sensor_tasks.values():
+            task.stop()
+        self._sensor_tasks.clear()
         logger.info("SensorManager stopped")
 
     def _loop(self):
@@ -75,14 +103,21 @@ class SensorManager:
                 self._emulate_data(start_time)
             time.sleep(0.1) # Rate limit
 
-    def _on_serial_data(self, topic, line):
+    def _on_serial_data(self, topic: str, line: tuple[SensorId, str]):
         # Only process if NOT in emulation mode
         if not self.emulation_mode:
             try:
-                if "ASC2" in line:
-                    self._parse_force(line)
-                elif "SPC_VAL" in line:
-                    self._parse_motion(line)
+                sensorId, line_str = line
+                if sensorId == SensorId.FORCE:
+                    self._parse_force(sensorId, line_str)
+                    
+                elif (sensorId == SensorId.DISP_1 or
+                      sensorId == SensorId.DISP_2 or
+                      sensorId == SensorId.DISP_3 or
+                      sensorId == SensorId.DISP_4 or
+                      sensorId == SensorId.DISP_5):
+                    self._parse_motion(sensorId, line_str)
+                    
             except Exception as e:
                 logger.warning(f"Error parsing line: {line} -> {e}")
 
@@ -95,17 +130,17 @@ class SensorManager:
                 self.offsets[sensor_id.value] = old_offset + current_val
                 logger.info(f"Zeroed sensor {sensor_id}. New offset: {self.offsets[sensor_id.value]}")
 
-    def _parse_force(self, line):
+    def _parse_force(self, sensorId: SensorId, line: str):
         # ASC2 20945595 -165341 -1.527986e-01 -4.965955e+01 -0.000000e+00
         parts = line.split()
         if len(parts) >= 5:
             try:
                 val = float(parts[4]) # Calibrated value
-                self._notify(SensorId.FORCE, val)
+                self._notify(sensorId, val)
             except ValueError:
                 pass
 
-    def _parse_motion(self, line):
+    def _parse_motion(self, sensorId: SensorId, line: str):
         # 76 144 262 us SPC_VAL usSenderId=0x2E01 ulMicros=76071216 Val=0.000
         parts = line.split()
         sender_id = None
@@ -120,51 +155,7 @@ class SensorManager:
                     pass
         
         if sender_id and val is not None:
-            sensor_id = self.motion_sensor_map.get(sender_id)
-
-            # If not configured, assign dynamically to next available DISP
-            if sensor_id is None:
-                sensor_id = self._assign_motion_sensor(sender_id)
-                if sensor_id:
-                    logger.info(f"Assigned motion sender {sender_id} to {sensor_id}")
-
-            if sensor_id:
-                self._notify(sensor_id, val)
-
-    def _load_motion_sensor_mapping(self):
-        """Load pre-defined motion sensor mappings from config."""
-        sensors_config = config_loader.get_all_sensors()
-        for sensor_id, sensor_config in sensors_config.items():
-            if not (sensor_id == SensorId.DISP_1 or
-                    sensor_id == SensorId.DISP_2 or
-                    sensor_id == SensorId.DISP_3 or
-                    sensor_id == SensorId.DISP_4 or
-                    sensor_id == SensorId.DISP_5):
-                continue
-            
-            sender_id = sensor_config.senderId
-            
-            if not sender_id:
-                continue
-            
-            self.motion_sensor_map[sender_id] = sensor_id
-        if self.motion_sensor_map:
-            logger.info(f"Loaded {len(self.motion_sensor_map)} motion sensor mappings from config")
-
-    def _assign_motion_sensor(self, sender_id: str) -> Optional[SensorId]:
-        """Assign sender_id to next available DISP sensor when not in config."""
-        disp_order = [
-            SensorId.DISP_1,
-            SensorId.DISP_2,
-            SensorId.DISP_3,
-            SensorId.DISP_4,
-            SensorId.DISP_5,
-        ]
-        for disp_sensor in disp_order:
-            if disp_sensor not in self.motion_sensor_map.values():
-                self.motion_sensor_map[sender_id] = disp_sensor
-                return disp_sensor
-        return None
+            self._notify(sensorId, val)
 
     def _emulate_data(self, start_time):
         elapsed = time.time() - start_time
@@ -203,9 +194,7 @@ class SensorManager:
         offset = self.offsets[sensor_id.value]
         corrected_value = value - offset
 
-        # Record data reception for health monitoring (in hardware mode)
-        if not self.emulation_mode:
-            sensor_reconnection_manager.record_sensor_data(sensor_id)
+
 
         # Publish raw value (before offset correction)
         raw_data = SensorData(

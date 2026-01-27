@@ -492,8 +492,8 @@ class TestManager:
         
         # Try to use a default font, fall back to default if not available
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 34)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
+            font = ImageFont.truetype("../fonts/DejaVuSans-Bold.ttf", 34)
+            font_small = ImageFont.truetype("../fonts/DejaVuSans.ttf", 22)
         except:
             font = ImageFont.load_default(size=34)
             font_small = ImageFont.load_default(size=22)

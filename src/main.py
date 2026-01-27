@@ -63,3 +63,4 @@ async def healthcheck() -> AppHealthOK:
 
 # mount API router under /api
 app.include_router(api_router, prefix="/api")
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)

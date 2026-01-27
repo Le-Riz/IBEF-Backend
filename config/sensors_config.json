@@ -5,53 +5,56 @@
       "baud": 115200,
       "description": "Force sensor (capteur de force)",
       "display_name": "Force (N)",
+      "serial_id": "",
       "max": 1000,
       "enabled": true
     },
     "DISP_1": {
-      "baud": 9600,
+      "baud": 115200,
       "description": "Motion sensor 1 (capteur de mouvement 1)",
       "display_name": "Fleche centrale (mm)",
       "max": 14,
-      "sender_id": "0x2E01",
+      "serial_id": "usb-Adafruit_Adafruit_Feather_M0_BF31609450304C4B552E3120FF042E0C-if00",
       "enabled": true
     },
     "DISP_2": {
-      "baud": 9600,
+      "baud": 115200,
       "description": "Motion sensor 2 (capteur de mouvement 2)",
       "display_name": "Deplacement 2 (mm)",
       "max": 14,
-      "sender_id": "0x2E02",
+      "serial_id": "",
       "enabled": true
     },
     "DISP_3": {
-      "baud": 9600,
+      "baud": 115200,
       "description": "Motion sensor 3 (capteur de mouvement 3)",
       "display_name": "Deplacement 3 (mm)",
       "max": 14,
-      "sender_id": "0x2E03",
+      "serial_id": "",
       "enabled": true
     },
     "DISP_4": {
-      "baud": 9600,
+      "baud": 115200,
       "description": "Motion sensor 4 (capteur de mouvement 4)",
       "display_name": "Deplacement 4 (mm)",
       "max": 14,
-      "sender_id": "0x2E04",
+      "serial_id": "",
       "enabled": true
     },
     "DISP_5": {
-      "baud": 9600,
+      "baud": 115200,
       "description": "Motion sensor 5 (capteur de mouvement 5)",
       "display_name": "Deplacement 5 (mm)",
       "max": 14,
-      "sender_id": "0x2E05",
+      "serial_id": "",
       "enabled": true
     }
-    ,
+  },
+  "calculated_sensors" : {
     "ARC": {
       "description": "Calculated arc (circular deflection)",
       "display_name": "Fleche d'arc (mm)",
+      "dependencies": ["DISP_1","DISP_2","DISP_3"],
       "max": 5
     }
   }
