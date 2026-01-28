@@ -1,5 +1,6 @@
 import datetime
 import logging
+import math
 import os
 import json
 import shutil
@@ -370,18 +371,19 @@ class TestManager:
         t = frame["timestamp"]
         rel_time = t - self.start_time
         values = frame["values"]
+        empty = True
+        
+        for val in values:
+            if not math.isnan(val):
+                empty = False
+                break
         
         # Plot points on both graphiques
-        disp1_value = values[SensorId.DISP_1.value]
-        arc_value = values[SensorId.ARC.value]
-        force_value = values[SensorId.FORCE.value]
-        
-        # Debug: log values occasionally
-        if int(rel_time * 10) % 20 == 0:  # Every 2 seconds
-            logger.info(f"Graph values - DISP_1: {disp1_value:.3f}, ARC: {arc_value:.3f}, FORCE: {force_value:.3f}")
-        
-        self._plot_point_on_graphique(SensorId.DISP_1, disp1_value, force_value)
-        self._plot_point_on_graphique(SensorId.ARC, arc_value, force_value)
+        if not math.isnan(values[SensorId.DISP_1.value]) and not math.isnan(values[SensorId.FORCE.value]):
+            self._plot_point_on_graphique(SensorId.DISP_1, values[SensorId.DISP_1.value], values[SensorId.FORCE.value])
+            
+        if not math.isnan(values[SensorId.ARC.value]) and not math.isnan(values[SensorId.FORCE.value]):
+            self._plot_point_on_graphique(SensorId.ARC, values[SensorId.ARC.value], values[SensorId.FORCE.value])
         
         # CSV Writing
         if self.csv_file:
@@ -391,21 +393,22 @@ class TestManager:
                 self.csv_writer = csv.DictWriter(self.csv_file, fieldnames=headers)
                 self.csv_writer.writeheader()
             
-            # Format timestamp and relative_time according to precision
-            row = {"timestamp": f"{t:.{self.time_decimals}f}", "relative_time": f"{rel_time:.{self.time_decimals}f}"}
-            # Convert enum keys to string names for CSV compatibility and format values
-            for sensor_id in SensorId:
-                val = values[sensor_id.value]
-                if val is None:
-                    row[sensor_id.name] = ""
-                elif sensor_id == SensorId.FORCE:
-                    row[sensor_id.name] = f"{val:.{self.force_decimals}f}"
-                elif sensor_id == SensorId.DISP_1 or sensor_id == SensorId.DISP_2 or sensor_id == SensorId.DISP_3 or sensor_id == SensorId.DISP_4 or sensor_id == SensorId.DISP_5 or sensor_id == SensorId.ARC:
-                    row[sensor_id.name] = f"{val:.{self.disp_decimals}f}"
-                else:
-                    row[sensor_id.name] = f"{val:.{self.force_decimals}f}"
-            self.csv_writer.writerow(row)
-            self.csv_file.flush()
+            if not empty:
+                # Format timestamp and relative_time according to precision
+                row = {"timestamp": f"{t:.{self.time_decimals}f}", "relative_time": f"{rel_time:.{self.time_decimals}f}"}
+                # Convert enum keys to string names for CSV compatibility and format values
+                for sensor_id in SensorId:
+                    val = values[sensor_id.value]
+                    if val is None or math.isnan(val):
+                        row[sensor_id.name] = ""
+                    elif sensor_id == SensorId.FORCE:
+                        row[sensor_id.name] = f"{val:.{self.force_decimals}f}"
+                    elif sensor_id == SensorId.DISP_1 or sensor_id == SensorId.DISP_2 or sensor_id == SensorId.DISP_3 or sensor_id == SensorId.DISP_4 or sensor_id == SensorId.DISP_5 or sensor_id == SensorId.ARC:
+                        row[sensor_id.name] = f"{val:.{self.disp_decimals}f}"
+                    else:
+                        row[sensor_id.name] = f"{val:.{self.force_decimals}f}"
+                self.csv_writer.writerow(row)
+                self.csv_file.flush()
 
         # Store data in circular buffers
         # Append (relative_time, value) tuples for each sensor
@@ -417,16 +420,17 @@ class TestManager:
         for sensor_id in SensorId:
             sensor_idx = sensor_id.value
             val = values[sensor_idx]
-            buffer = self.data_storage.buffers[sensor_idx]
-            if buffer.size() == 0:
-                # buffer empty -> always append
-                self.data_storage.append(sensor_idx, rel_time, val)
-            else:
-                # Get last recorded time (logical index = size-1)
-                last_time, _ = buffer.get(buffer.size() - 1)
-                expected_time = last_time + spacing
-                if rel_time + epsilon >= expected_time:
+            if not math.isnan(val):
+                buffer = self.data_storage.buffers[sensor_idx]
+                if buffer.size() == 0:
+                    # buffer empty -> always append
                     self.data_storage.append(sensor_idx, rel_time, val)
+                else:
+                    # Get last recorded time (logical index = size-1)
+                    last_time, _ = buffer.get(buffer.size() - 1)
+                    expected_time = last_time + spacing
+                    if rel_time + epsilon >= expected_time:
+                        self.data_storage.append(sensor_idx, rel_time, val)
                 
     def get_sensor_history(self, sensor_id: SensorId, window_seconds: int):
         """Return recent data for a sensor over the requested window (seconds)."""

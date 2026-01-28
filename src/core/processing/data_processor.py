@@ -1,10 +1,12 @@
 import time
 import asyncio
 import logging
+import math
 from typing import Dict, Optional, Any
 from core.event_hub import event_hub
 from core.models.sensor_data import SensorData
 from core.models.sensor_enum import SensorId
+from core.services.sensor_manager import sensor_manager
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +17,7 @@ class DataProcessor:
     def __init__(self):
         self.running = False
         self.latest_values: list[float] = [0.0 for _ in SensorId]
+        self.nan_counts: list[int] = [0 for _ in SensorId]
         self._task: Optional[asyncio.Task] = None
         
         # Subscribe to internal raw updates to update cache
@@ -36,7 +39,14 @@ class DataProcessor:
         logger.info("DataProcessor stopped")
 
     def _on_raw_update(self, topic, data: SensorData):
-        self.latest_values[data.sensor_id.value] = data.value
+        if(not math.isnan(data.value)):
+            self.nan_counts[data.sensor_id.value] = 0
+            self.latest_values[data.sensor_id.value] = data.value
+        else:
+            self.nan_counts[data.sensor_id.value] += 1
+            if self.nan_counts[data.sensor_id.value] > 2:
+                logger.warning(f"[DataProcessor] Sensor {data.sensor_id} has sent {self.nan_counts[data.sensor_id.value]} consecutive NaN values.")
+                self.latest_values[data.sensor_id.value] = math.nan
 
     async def _process_loop(self):
         interval = 1.0 / PROCESSING_RATE
@@ -46,6 +56,10 @@ class DataProcessor:
             # Create a frame
             # TODO: Linear interpolation if we wanted to be fancy, but Sample & Hold is sufficient 
             # and causal for real-time monitoring.
+            
+            for sensor_id in SensorId:
+                if not sensor_manager.is_sensor_connected(sensor_id):
+                    self.latest_values[sensor_id.value] = math.nan
             
             # Calculate ARC (circular deflection): DISP_1 - (DISP_2 + DISP_3) / 2
             values_copy = self.latest_values.copy()
