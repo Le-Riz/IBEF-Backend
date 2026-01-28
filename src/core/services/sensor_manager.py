@@ -6,6 +6,7 @@ import random
 from typing import Dict, Optional
 
 from core.config_loader import config_loader
+from core.models.config_data import calculatedConfigSensorData
 from core.models.sensor_data import SensorData
 from core.models.sensor_enum import SensorId
 from core.event_hub import event_hub
@@ -76,12 +77,15 @@ class SensorManager:
             return config_loader.is_sensor_enabled(sensor_id)
         
         # Hardware mode: check if we have a running SensorTask
-        if sensor_id.name == "ARC":
-            return (
-                self.is_sensor_connected(SensorId.DISP_1)
-                and self.is_sensor_connected(SensorId.DISP_2)
-                and self.is_sensor_connected(SensorId.DISP_3)
-            )
+        if sensor_id == SensorId.ARC:
+            arc_config = config_loader.get_sensor_config(sensor_id)
+            if not isinstance(arc_config, calculatedConfigSensorData):
+                return False
+            for sensor in arc_config.dependencies:
+                if not self.is_sensor_connected(sensor.id):
+                    return False
+            return True
+            
         return sensor_id in self._sensor_tasks and self._sensor_tasks[sensor_id].is_connected()
     
     def stop(self):

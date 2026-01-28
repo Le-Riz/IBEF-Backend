@@ -57,7 +57,7 @@ async def get_graphique(
             raise HTTPException(status_code=503, detail="Sensor DISP_1 is not connected")
     # For ARC X-axis, check DISP_2 and DISP_3 connection (ARC is calculated from DISP_2, DISP_3)
     else:  # sensor_name == 'ARC'
-        if not sensor_manager.is_sensor_connected(SensorId.DISP_2) or not sensor_manager.is_sensor_connected(SensorId.DISP_3):
+        if not sensor_manager.is_sensor_connected(SensorId.ARC):
             raise HTTPException(status_code=503, detail="Sensors DISP_2 and DISP_3 are not connected (required for ARC calculation)")
     
     # Also check FORCE connection (Y-axis)
@@ -124,7 +124,7 @@ async def get_graphique_base64(
             raise HTTPException(status_code=503, detail="Sensor DISP_1 is not connected")
     # For ARC X-axis, check DISP_2 and DISP_3 connection (ARC is calculated from DISP_2, DISP_3)
     else:  # sensor_name == 'ARC'
-        if not sensor_manager.is_sensor_connected(SensorId.DISP_2) or not sensor_manager.is_sensor_connected(SensorId.DISP_3):
+        if not sensor_manager.is_sensor_connected(SensorId.ARC):
             raise HTTPException(status_code=503, detail="Sensors DISP_2 and DISP_3 are not connected (required for ARC calculation)")
     
     # Also check FORCE connection (Y-axis)

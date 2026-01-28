@@ -9,7 +9,7 @@ from core.models.sensor_enum import SensorId
 logger = logging.getLogger(__name__)
 
 # Config
-PROCESSING_RATE = 20.0 # 20 Hz common time step
+PROCESSING_RATE = 4.0 # 4 Hz common time step
 
 class DataProcessor:
     def __init__(self):
