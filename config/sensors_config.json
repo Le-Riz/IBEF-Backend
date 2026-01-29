@@ -1,11 +1,11 @@
 {
-  "emulation": true,
+  "emulation": false,
   "sensors": {
     "FORCE": {
       "baud": 115200,
       "description": "Force sensor (capteur de force)",
       "display_name": "Force (N)",
-      "serial_id": "",
+      "serial_id": "usb-1a86_USB2.0-Serial-if00-port0",
       "max": 1000,
       "enabled": true
     },
@@ -22,7 +22,7 @@
       "description": "Motion sensor 2 (capteur de mouvement 2)",
       "display_name": "Deplacement 2 (mm)",
       "max": 14,
-      "serial_id": "",
+      "serial_id": "usb-Adafruit_Adafruit_Feather_M0_714ACFDC50304C4B552E3120FF052C1A-if00",
       "enabled": true
     },
     "DISP_3": {
@@ -30,7 +30,7 @@
       "description": "Motion sensor 3 (capteur de mouvement 3)",
       "display_name": "Deplacement 3 (mm)",
       "max": 14,
-      "serial_id": "",
+      "serial_id": "usb-Adafruit_Adafruit_Feather_M0_B3EE8F3050304C4B552E3120FF08061F-if00",
       "enabled": true
     },
     "DISP_4": {
@@ -38,7 +38,7 @@
       "description": "Motion sensor 4 (capteur de mouvement 4)",
       "display_name": "Deplacement 4 (mm)",
       "max": 14,
-      "serial_id": "",
+      "serial_id": "usb-Adafruit_Adafruit_Feather_M0_C6C61DEE50304C4B552E3120FF022A31-if00",
       "enabled": true
     },
     "DISP_5": {
@@ -46,7 +46,7 @@
       "description": "Motion sensor 5 (capteur de mouvement 5)",
       "display_name": "Deplacement 5 (mm)",
       "max": 14,
-      "serial_id": "",
+      "serial_id": "usb-Adafruit_Adafruit_Feather_M0_96D2E6055154384153202020FF182B13-if00",
       "enabled": true
     }
   },
