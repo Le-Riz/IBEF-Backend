@@ -377,6 +377,9 @@ class TestManager:
         if not math.isnan(datas[SensorId.ARC.value].value) and not math.isnan(datas[SensorId.FORCE.value].value):
             self.graphique_arc.plot_point_on_graphique(datas[SensorId.ARC.value].value, datas[SensorId.FORCE.value].value)
         
+        # TODO: Remove writing CSV on update value and do it with interpolation when finalizing the test
+        # TODO: When interpolating if value is NaN take the next one until the gap between the two points exit a fixed value
+        #       (default 500ms) and put blank in csv when can't use value
         # CSV Writing
         if self.csv_file:
             if self.csv_writer is None:

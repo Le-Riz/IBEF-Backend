@@ -95,12 +95,14 @@ async def download_history(name: str):
             except Exception:
                 description_text = ""
 
+            # TODO: Replace , in data csv with \t and . by , in the export.csv 
             data_csv_text = ""
             try:
                 with open(data_csv_path, 'r', encoding='utf-8') as cf:
                     data_csv_text = cf.read().strip()
             except Exception:
                 data_csv_text = ""
+
 
             # Compose CSV-like content: metadata, blank line, description, blank line, data.csv
             parts = []
