@@ -219,7 +219,7 @@ class SensorManager:
         if sensor_id in self._sensor_tasks:
             self._sensor_tasks[sensor_id].add_write_func(write_func)
             
-    def add_write_func(self, write_func: Callable[[SensorId, float, str], None]):
+    def add_write_funcs(self, write_func: Callable[[SensorId, float, str], None]):
         """Add a write function to all sensor tasks."""
         for task in self._sensor_tasks.values():
             task.add_write_func(write_func)

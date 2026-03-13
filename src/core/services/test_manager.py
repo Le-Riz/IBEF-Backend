@@ -85,7 +85,7 @@ class TestManager:
         self.reload_history()
 
         # Add write functions to receive data from SensorManager and processed data from DataProcessor
-        sensor_manager.add_write_func(self._on_serial_data)
+        sensor_manager.add_write_funcs(self._on_serial_data)
         
         data_processor.set_processing_function(self._on_processed_data)
         sensor_manager.add_func_notify(self._on_raw_sensor_data)
