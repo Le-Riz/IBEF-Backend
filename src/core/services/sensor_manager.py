@@ -127,6 +127,12 @@ class SensorManager:
         """Manually zero a sensor by updating its offset."""
         if sensor_id in SensorId:
             current_val = self.sensors[sensor_id.value]
+            
+            #TODO: Consider if we should allow zeroing when value is NaN, or if we should require a valid reading first. For now, we will prevent zeroing if current value is NaN to avoid setting an offset based on invalid data.
+            if math.isnan(current_val):
+                logger.warning(f"Cannot zero sensor {sensor_id} because current value is NaN")
+                return
+            
             old_offset = self.offsets[sensor_id.value]
             self.offsets[sensor_id.value] = old_offset + current_val
             logger.info(f"Zeroed sensor {sensor_id}. New offset: {self.offsets[sensor_id.value]}")
