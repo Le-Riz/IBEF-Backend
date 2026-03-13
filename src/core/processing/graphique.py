@@ -188,8 +188,8 @@ class Graphique:
                     fill=self.config.line_color,
                     width=self.config.line_width
                 )
-            
-            self.last_point = current_point
+
+        self.last_point = current_point
         
     def save_graphique(self, directory: str|None, filename: str):
         if directory is None:
