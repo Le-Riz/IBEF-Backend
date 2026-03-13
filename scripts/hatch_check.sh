@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# TODO: Remove hatch and just use venv
+
 set -euo pipefail
 
 if ! command -v pipx >/dev/null 2>&1; then
@@ -28,6 +30,6 @@ if command -v hatch >/dev/null 2>&1; then
 	exit 0
 else
     echo "Installing hatch"
-    pipx install --global hatch
+    sudo pipx install hatch
 fi
 
