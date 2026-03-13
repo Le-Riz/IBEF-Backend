@@ -21,7 +21,7 @@ class GraphiqueConfig:
     line_color: str = 'black'
     line_width: int = 4
     x_tick_interval: int = 2
-    y_tick_interval: int = 5
+    y_tick_interval: int = 200
     tick_size: int = 10
     font_size: int = 34
     small_font_size: int = 22
