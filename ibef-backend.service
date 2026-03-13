@@ -19,7 +19,7 @@ ExecStartPre=/bin/bash -c "chmod +x run.sh"
 # Check if Hatch is installed and install it if not
 ExecStartPre=/bin/bash -c "scripts/hatch_check.sh"
 
-ExecStart=/bin/bash -c "run.sh api"
+ExecStart=/bin/bash -c "./run.sh api"
 
 [Install]
 WantedBy=multi-user.target
