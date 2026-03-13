@@ -1,15 +1,17 @@
 
 import asyncio
-from typing import Optional, Callable
+from typing import Optional, Callable, Awaitable
 import serial
-from core.event_hub import event_hub
 from core.models.sensor_enum import SensorId
-from core.sensor_reconnection import SensorTask
 from core.sensor_reconnection import SensorHealthMonitor, SensorTask, SensorState
 
-from typing import Awaitable
-
-def make_serial_read_func(sensor_id: SensorId, port: str, baudrate: int = 9600, monitor=None) -> Callable[[], Awaitable[Optional[str]]]:
+def make_serial_read_func(
+    sensor_id: SensorId,
+    port: str,
+    baudrate: int = 9600,
+    monitor=None,
+    serial_timeout: float = 0.5,
+) -> Callable[[], Awaitable[Optional[str]]]:
     """
     Returns an async function that reads one line from the serial port for the sensor.
     The function returns the line if data is received, or None if not.
@@ -25,24 +27,25 @@ def make_serial_read_func(sensor_id: SensorId, port: str, baudrate: int = 9600, 
         nonlocal ser, connected
         try:
             if ser is None:
-                ser = serial.Serial(port, baudrate, timeout=0.1)
+                ser = serial.Serial(port, baudrate, timeout=serial_timeout)
                 if not connected:
                     logger.warning(f"[Serial] {sensor_id} connected on {port} @ {baudrate} baud")
                     connected = True
                     if monitor is not None:
                         monitor.state = SensorState.CONNECTED
                         monitor.record_data()
-            if ser.in_waiting > 0:
-                try:
-                    line = ser.readline().decode('utf-8').strip()
-                    if line:
-                        event_hub.send_all_on_topic("serial_data", (sensor_id, line))
-                        if monitor is not None:
-                            monitor.record_data()
-                        return line
-                except UnicodeDecodeError:
-                    logger.warning(f"Error decoding serial data from {sensor_id} ({port})")
-            await asyncio.sleep(0.01)
+            raw_line = await asyncio.to_thread(ser.readline)
+            if not raw_line:
+                return None
+            try:
+                line = raw_line.decode('utf-8').strip()
+                if line:
+                    #event_hub.send_all_on_topic("serial_data", (sensor_id, line))
+                    if monitor is not None:
+                        monitor.record_data()
+                    return line
+            except UnicodeDecodeError:
+                logger.warning(f"Error decoding serial data from {sensor_id} ({port})")
             return None
         except (serial.SerialException, OSError) as e:
             if connected:
@@ -75,7 +78,13 @@ def make_serial_read_func(sensor_id: SensorId, port: str, baudrate: int = 9600, 
     return read_func
 
 # Factory to create a SensorTask for a serial sensor
-def create_serial_sensor_task(sensor_id: SensorId, port: str, baudrate: int = 9600, max_silence_time: float = 5.0) -> SensorTask:
+def create_serial_sensor_task(
+    sensor_id: SensorId,
+    port: str,
+    baudrate: int = 9600,
+    max_silence_time: float = 5.0,
+    serial_timeout: float = 0.5,
+) -> SensorTask:
     monitor = SensorHealthMonitor(sensor_id, max_silence_time=max_silence_time)
-    read_func = make_serial_read_func(sensor_id, port, baudrate, monitor=monitor)
+    read_func = make_serial_read_func(sensor_id, port, baudrate, monitor=monitor, serial_timeout=serial_timeout)
     return SensorTask(sensor_id, read_func, max_silence_time=max_silence_time, monitor=monitor)

@@ -3,7 +3,6 @@ import asyncio
 import logging
 
 # Internal libs
-from core.event_hub import init_event_hub
 from core.models.config_data import configSensorData
 from core.models.sensor_enum import SensorId
 from core.services.sensor_manager import sensor_manager
@@ -23,9 +22,6 @@ class ServiceManager:
             emulation: When True, start `SensorManager` in emulation mode and skip serial reader.
         """
         logger.info("Starting background services...")
-        loop = asyncio.get_running_loop()
-        # Init Event Hub
-        init_event_hub(loop)
         # Data Processor (publishes processed_data at fixed rate)
         data_processor.start()
         # Sensor Manager: in hardware mode, pass detected sensor ports/bauds

@@ -3,7 +3,6 @@ import time
 import math
 from core.models.sensor_enum import SensorId
 from core.models.circular_buffer import DisplayDuration
-from core.event_hub import event_hub
 from core.services.sensor_manager import sensor_manager
 from core.services.test_manager import test_manager
 
@@ -12,51 +11,6 @@ from schemas import Point, PointsList, OffsetResponse
 VALID_SENSOR_VALUES = ", ".join([s.name for s in SensorId])
 
 router = APIRouter(prefix="/sensor", tags=["sensor"])
-
-
-def _interpolate_small_nan_gaps(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    """Replace NaN runs of length ≤2 by linear interpolation; drop longer runs.
-    Keeps chronological order and removes any remaining NaN to avoid JSON errors.
-    """
-    cleaned: list[tuple[float, float]] = []
-    i = 0
-    n = len(points)
-    while i < n:
-        t, v = points[i]
-        if not math.isnan(v):
-            cleaned.append((t, v))
-            i += 1
-            continue
-
-        # Start of a NaN run
-        start = i
-        while i < n and math.isnan(points[i][1]):
-            i += 1
-        end = i - 1
-        run_len = end - start + 1
-
-        prev_point = cleaned[-1] if cleaned else None
-        next_point = points[i] if i < n else None
-
-        can_interpolate = (
-            run_len <= 2 and prev_point is not None and next_point is not None
-            and not math.isnan(prev_point[1]) and not math.isnan(next_point[1])
-        )
-
-        if can_interpolate:
-            # Linear interpolation across the gap (distributes points evenly)
-            gap_time = next_point[0] - prev_point[0]
-            gap_value = next_point[1] - prev_point[1]
-            steps = run_len + 1
-            for k in range(1, run_len + 1):
-                factor = k / steps
-                interp_t = prev_point[0] + gap_time * factor
-                interp_v = prev_point[1] + gap_value * factor
-                cleaned.append((interp_t, interp_v))
-        # Otherwise: drop this NaN run (leave a gap)
-
-    return cleaned
-
 
 @router.get("/{sensor_id}/data", response_model=Point, responses={
     400: {
@@ -168,8 +122,7 @@ async def get_sensor_data_history(sensor_id: str, window: int = 30) -> PointsLis
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
-    cleaned_points = _interpolate_small_nan_gaps(data_points)
-    points = [Point(time=t, value=v) for t, v in cleaned_points]
+    points = [Point(time=t, value=v) for t, v in data_points]
     return PointsList(list=points)
 
 
@@ -301,5 +254,5 @@ async def zero_sensor(sensor_id: str) -> None:
             detail=f"Sensor {sensor.name} is not connected"
         )
     
-    # Send command to sensor manager via event hub
-    event_hub.send_all_on_topic("sensor_command", {"action": "zero", "sensor_id": sensor})
+    # Launch the zeroing operation of sensor
+    sensor_manager.set_zero(sensor)

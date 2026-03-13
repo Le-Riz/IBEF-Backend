@@ -13,4 +13,5 @@ class SensorData:
     timestamp: float
     sensor_id: SensorId
     value: float
+    raw_timestamp: float
     raw_value: float = 0.0

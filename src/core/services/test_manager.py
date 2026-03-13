@@ -6,19 +6,22 @@ import json
 import shutil
 import time
 import csv
-from typing import List, Optional, Any, Dict
+from typing import List, Optional
 from dataclasses import asdict
 import io
 
 from PIL import Image, ImageDraw, ImageFont
 
+from core.models.sensor_data import SensorData
 from core.models.test_data import TestMetaData
 from core.models.test_state import TestState
 from core.models.sensor_enum import SensorId
 from core.models.circular_buffer import SensorDataStorage
-from core.event_hub import event_hub
 from core.processing.data_processor import PROCESSING_RATE
 from core.config_loader import config_loader
+from core.processing.graphique import Graphique, GraphiqueConfig
+from core.services.sensor_manager import sensor_manager
+from core.processing.data_processor import data_processor
 
 logger = logging.getLogger(__name__)
 
@@ -60,16 +63,8 @@ class TestManager:
         self.current_test_dir = None
         
         # PIL Images for graphiques (DISP_1 and ARC)
-        self.graphique_disp1_image = None
-        self.graphique_disp1_draw = None
-        self.graphique_arc_image = None
-        self.graphique_arc_draw = None
-        # Expanded canvas to provide larger plotting area and more padding
-        self.graphique_width = 1100
-        self.graphique_height = 1100
-        self.graphique_margin = 85
-        self.graphique_disp1_last_point = None  # Track last point for DISP_1 line drawing
-        self.graphique_arc_last_point = None    # Track last point for ARC line drawing
+        self.graphique_disp1 = Graphique(SensorId.DISP_1, SensorId.FORCE, GraphiqueConfig())
+        self.graphique_arc = Graphique(SensorId.ARC, SensorId.FORCE, GraphiqueConfig(x_min=-5.0))
 
         # Numeric output precision (decimals after the decimal point)
         # time: number of decimals for relative_time (seconds)
@@ -89,10 +84,11 @@ class TestManager:
         # Load history
         self.reload_history()
 
-        # Subscribe
-        event_hub.subscribe("serial_data", self._on_serial_data)
-        event_hub.subscribe("processed_data", self._on_processed_data)
-        event_hub.subscribe("sensor_raw_update", self._on_raw_sensor_data)
+        # Add write functions to receive data from SensorManager and processed data from DataProcessor
+        sensor_manager.add_write_func(self._on_serial_data)
+        
+        data_processor.set_processing_function(self._on_processed_data)
+        sensor_manager.add_func_notify(self._on_raw_sensor_data)
 
     def reload_history(self):
         """Scans the disk for existing tests."""
@@ -131,7 +127,6 @@ class TestManager:
         # Sort by date (desc)
         self.test_history.sort(key=lambda x: x.date, reverse=True)
         logger.info(f"[RELOAD] Finished loading {len(self.test_history)} tests")
-        event_hub.send_all_on_topic("history_updated", None)
 
     def get_test_state(self) -> TestState:
         """
@@ -179,8 +174,6 @@ class TestManager:
         description_content = f"# {metadata.test_id}\n\nDescription de l'expérience.\n\n## Informations\n- Date: {metadata.date}\n- Opérateur: {metadata.operator_name}\n- Spécimen: {metadata.specimen_code}"
         with open(os.path.join(self.current_test_dir, "description.md"), 'w', encoding='utf-8') as f:
             f.write(description_content)
-        
-        event_hub.send_all_on_topic("test_prepared", metadata)
 
     def start_test(self):
         if self.is_running:
@@ -209,17 +202,8 @@ class TestManager:
         self.raw_csv_writer = None
         
         # Initialize both graphiques (DISP_1 and ARC)
-        # DISP_1 graphique
-        self.graphique_disp1_image = Image.new('RGBA', (self.graphique_width, self.graphique_height), (255, 255, 255, 0))
-        self.graphique_disp1_draw = ImageDraw.Draw(self.graphique_disp1_image)
-        self.graphique_disp1_last_point = None
-        # ARC graphique
-        self.graphique_arc_image = Image.new('RGBA', (self.graphique_width, self.graphique_height), (255, 255, 255, 0))
-        self.graphique_arc_draw = ImageDraw.Draw(self.graphique_arc_image)
-        self.graphique_arc_last_point = None
-        # Draw axes on both
-        self._draw_graphique_axes(SensorId.DISP_1)
-        self._draw_graphique_axes(SensorId.ARC)
+        self.graphique_disp1.reset()
+        self.graphique_arc.reset()
         
         self.is_running = True
         # Reset emulation clock when a real/recorded test starts
@@ -229,8 +213,6 @@ class TestManager:
         self.start_time = datetime.datetime.now().timestamp()
         
         logger.info(f"Test started: {metadata.test_id}")
-        event_hub.send_all_on_topic("test_started", metadata)
-        event_hub.send_all_on_topic("test_state_changed", True)
 
     def stop_test(self):
         """Stop recording data but keep test in memory for review/finalization."""
@@ -255,15 +237,12 @@ class TestManager:
             self.csv_writer = None
         
         # Save graphiques to test directory
-        self._save_graphiques()
+        self.graphique_disp1.save_graphique(self.current_test_dir, "graphique_disp1.png")
+        self.graphique_arc.save_graphique(self.current_test_dir, "graphique_arc.png")
         
         # Mark as stopped but keep in memory
         self.is_running = False
         self.is_stopped = True
-        
-        temp_test = self.current_test
-        event_hub.send_all_on_topic("test_stopped", temp_test)
-        event_hub.send_all_on_topic("test_state_changed", False)
 
     def finalize_test(self):
         """Move stopped test to history and clear current test."""
@@ -276,17 +255,12 @@ class TestManager:
         logger.info(f"Test finalized: {self.current_test.test_id}")
         
         # Clean up PIL images
-        self.graphique_disp1_image = None
-        self.graphique_disp1_draw = None
-        self.graphique_disp1_last_point = None
-        self.graphique_arc_image = None
-        self.graphique_arc_draw = None
-        self.graphique_arc_last_point = None
+        self.graphique_disp1.reset()
+        self.graphique_arc.reset()
         
         # Clear data storage
         self.data_storage.clear_all()
         
-        temp_test = self.current_test
         self.current_test = None
         self.current_test_dir = None
         self.is_stopped = False
@@ -296,8 +270,6 @@ class TestManager:
         
         # Reload history now that the test is finalized and cleared from memory
         self.reload_history()
-        
-        event_hub.send_all_on_topic("test_finalized", temp_test)
 
     def archive_test(self, test_id: str):
         """Moves a test folder to the archive directory."""
@@ -320,13 +292,11 @@ class TestManager:
             return True
         return False
 
-    def _on_serial_data(self, topic, line):
+    def _on_serial_data(self, sensor_id: SensorId, time: float, line: str):
         if self.is_running and self.raw_file:
-            # Timestamp locally
-            ts = datetime.datetime.now().isoformat()
-            self.raw_file.write(f"[{ts}] {line}\n")
+            self.raw_file.write(f"[{time}] {sensor_id.name} {line}\n")
 
-    def _on_raw_sensor_data(self, topic, sensor_data):
+    def _on_raw_sensor_data(self, sensor_data: SensorData):
         """Handle raw (uncalibrated) sensor data from SensorManager."""
         if not self.is_running or not self.raw_csv_file:
             return
@@ -363,27 +333,49 @@ class TestManager:
         self.raw_csv_writer.writerow(row)
         self.raw_csv_file.flush()
 
-    def _on_processed_data(self, topic, frame):
-        """Frame format: {"timestamp": float, "values": dict, ...}"""
+    def _store_sensor_data(self, data: SensorData, epsilon: float = 1e-6):
+        """Store data in circular buffers
+        Append (relative_time, value) tuples for each sensor
+        Only append points that respect the storage sampling frequency.
+        For each sensor, check the last recorded point time and ensure the
+        new point's relative time is >= last_time + spacing (with small epsilon)."""
+        sensor_idx = data.sensor_id.value
+        val = data.value
+        spacing = 1.0 / float(self.data_storage.sampling_frequency)
+        rel_time = data.timestamp - self.start_time
+        
+        if not math.isnan(val):
+            buffer = self.data_storage.buffers[sensor_idx]
+            if buffer.size() == 0:
+                # buffer empty -> always append
+                self.data_storage.append(sensor_idx, rel_time, val)
+            else:
+                # Get last recorded time (logical index = size-1)
+                last_time, _ = buffer.get(buffer.size() - 1)
+                expected_time = last_time + spacing
+                if rel_time + epsilon >= expected_time:
+                    self.data_storage.append(sensor_idx, rel_time, val)
+
+    def _on_processed_data(self, datas: list[SensorData]):
+        """Handle processed (calibrated) sensor data from DataProcessor."""
         if not self.is_running:
             return
 
-        t = frame["timestamp"]
+        t = datas[0].timestamp if datas and datas[0].timestamp > 0.0 else time.time()
         rel_time = t - self.start_time
-        values = frame["values"]
         empty = True
         
-        for val in values:
-            if not math.isnan(val):
+        for data in datas:
+            if not math.isnan(data.value):
                 empty = False
                 break
         
         # Plot points on both graphiques
-        if not math.isnan(values[SensorId.DISP_1.value]) and not math.isnan(values[SensorId.FORCE.value]):
-            self._plot_point_on_graphique(SensorId.DISP_1, values[SensorId.DISP_1.value], values[SensorId.FORCE.value])
+        if not math.isnan(datas[SensorId.DISP_1.value].value) and not math.isnan(datas[SensorId.FORCE.value].value):
+            self.graphique_disp1.plot_point_on_graphique(datas[SensorId.DISP_1.value].value, datas[SensorId.FORCE.value].value)
             
-        if not math.isnan(values[SensorId.ARC.value]) and not math.isnan(values[SensorId.FORCE.value]):
-            self._plot_point_on_graphique(SensorId.ARC, values[SensorId.ARC.value], values[SensorId.FORCE.value])
+        if not math.isnan(datas[SensorId.ARC.value].value) and not math.isnan(datas[SensorId.FORCE.value].value):
+            self.graphique_arc.plot_point_on_graphique(datas[SensorId.ARC.value].value, datas[SensorId.FORCE.value].value)
         
         # CSV Writing
         if self.csv_file:
@@ -398,7 +390,7 @@ class TestManager:
                 row = {"timestamp": f"{t:.{self.time_decimals}f}", "relative_time": f"{rel_time:.{self.time_decimals}f}"}
                 # Convert enum keys to string names for CSV compatibility and format values
                 for sensor_id in SensorId:
-                    val = values[sensor_id.value]
+                    val = datas[sensor_id.value].value
                     if val is None or math.isnan(val):
                         row[sensor_id.name] = ""
                     elif sensor_id == SensorId.FORCE:
@@ -410,27 +402,8 @@ class TestManager:
                 self.csv_writer.writerow(row)
                 self.csv_file.flush()
 
-        # Store data in circular buffers
-        # Append (relative_time, value) tuples for each sensor
-        # Only append points that respect the storage sampling frequency.
-        # For each sensor, check the last recorded point time and ensure the
-        # new point's relative time is >= last_time + spacing (with small epsilon).
-        spacing = 1.0 / float(self.data_storage.sampling_frequency)
-        epsilon = 1e-6
-        for sensor_id in SensorId:
-            sensor_idx = sensor_id.value
-            val = values[sensor_idx]
-            if not math.isnan(val):
-                buffer = self.data_storage.buffers[sensor_idx]
-                if buffer.size() == 0:
-                    # buffer empty -> always append
-                    self.data_storage.append(sensor_idx, rel_time, val)
-                else:
-                    # Get last recorded time (logical index = size-1)
-                    last_time, _ = buffer.get(buffer.size() - 1)
-                    expected_time = last_time + spacing
-                    if rel_time + epsilon >= expected_time:
-                        self.data_storage.append(sensor_idx, rel_time, val)
+        for sensor_data in datas:
+            self._store_sensor_data(sensor_data)
                 
     def get_sensor_history(self, sensor_id: SensorId, window_seconds: int):
         """Return recent data for a sensor over the requested window (seconds)."""
@@ -464,255 +437,18 @@ class TestManager:
 
         return 0.0
 
-    def _draw_graphique_axes(self, sensor_id: SensorId):
-        """Draw X and Y axes on the graphique with labels and units.
-        
-        Args:
-            sensor_id: Either 'DISP_1' or 'ARC' to determine which graphique to draw on
-        """
-        # Use config values when available (display_name and max)
-        sensor_cfg = config_loader.get_sensor_config(sensor_id)
-        display_name = sensor_cfg.displayName
-        x_label = f"{display_name}"
-
-        if sensor_id == SensorId.DISP_1:
-            draw = self.graphique_disp1_draw
-            x_max = sensor_cfg.max
-            x_min = 0.0
-        elif sensor_id == SensorId.ARC:
-            draw = self.graphique_arc_draw
-            x_max = sensor_cfg.max
-            x_min = -5.0
-        else:
-            return
-        
-        if draw is None:
-            return
-        
-        # Axis color (black)
-        axis_color = 'black'
-        axis_width = 4
-        text_color = 'black'
-        
-        # Try to use a default font, fall back to default if not available
-        try:
-            font = ImageFont.truetype("../fonts/DejaVuSans-Bold.ttf", 34)
-            font_small = ImageFont.truetype("../fonts/DejaVuSans.ttf", 22)
-        except:
-            font = ImageFont.load_default(size=34)
-            font_small = ImageFont.load_default(size=22)
-        
-        # X axis (bottom)
-        x_axis_y = self.graphique_height - self.graphique_margin
-        draw.line(
-            [(self.graphique_margin, x_axis_y), 
-             (self.graphique_width - self.graphique_margin, x_axis_y)],
-            fill=axis_color,
-            width=axis_width
-        )
-        
-        # Y axis (left)
-        # Shift Y axis (FORCE) further right for more left padding
-        y_axis_x = self.graphique_margin + 30
-        draw.line(
-            [(y_axis_x, self.graphique_margin), 
-             (y_axis_x, self.graphique_height - self.graphique_margin)],
-            fill=axis_color,
-            width=axis_width
-        )
-        
-        # Draw ticks and labels on X axis
-        tick_size = 10
-        tick_interval = 2 if sensor_id == SensorId.ARC else 3  # ARC: every 2, DISP_1: every 3
-        x_range = x_max - x_min
-        
-        # Generate tick values based on range
-        if sensor_id == SensorId.ARC:
-            tick_values = range(int(x_min), int(x_max) + 1, tick_interval)
-        else:
-            tick_values = range(int(x_min), int(x_max) + 1, tick_interval)
-        
-        for x_val in tick_values:
-            # Map x_val to pixel position
-            pixel_x = self.graphique_margin + ((x_val - x_min) / x_range) * (self.graphique_width - 2 * self.graphique_margin)
-            # Draw tick
-            draw.line(
-                [(pixel_x, x_axis_y), (pixel_x, x_axis_y + tick_size)],
-                fill=axis_color,
-                width=3
-            )
-            # Draw label
-            label = str(x_val)
-            # Center label horizontally and clamp within horizontal margins to avoid overflow
-            try:
-                text_w = font_small.getlength(label)
-            except Exception:
-                # Fallback if getsize missing
-                text_w = 30
-            label_x = pixel_x - (text_w / 2)
-            # Clamp so text stays inside left/right margins
-            min_x = self.graphique_margin
-            max_x = self.graphique_width - self.graphique_margin - text_w
-            label_x = max(min_x, min(max_x, label_x))
-            draw.text(
-                (label_x, x_axis_y + tick_size + 10),
-                label,
-                fill=text_color,
-                font=font_small
-            )
-        
-        # X axis label (move lower for more bottom padding) and clamp horizontally
-        try:
-            xlabel_w = font.getlength(x_label)
-        except Exception:
-            xlabel_w = 200
-        desired_x = self.graphique_width - 220
-        min_x = self.graphique_margin
-        max_x = self.graphique_width - self.graphique_margin - xlabel_w
-        xlabel_x = max(min_x, min(max_x, desired_x))
-        draw.text(
-            (xlabel_x, self.graphique_height - self.graphique_margin + 40),
-            x_label,
-            fill=text_color,
-            font=font
-        )
-        
-        # Draw ticks and labels on Y axis using FORCE config
-        force_cfg = config_loader.get_sensor_config(SensorId.FORCE) or {}
-        force_max = float(force_cfg.max)
-        force_interval = max(int(force_max // 5), 1)  # 5 ticks by default
-        
-        for force_val in range(0, int(force_max) + 1, force_interval):
-            pixel_y = self.graphique_height - self.graphique_margin - (force_val / force_max) * (self.graphique_height - 2 * self.graphique_margin)
-            # Draw tick
-            draw.line(
-                [(y_axis_x - tick_size, pixel_y), (y_axis_x, pixel_y)],
-                fill=axis_color,
-                width=3
-            )
-            # Draw label
-            label = str(int(force_val))
-            draw.text(
-                (y_axis_x - 65, pixel_y - 10),  # shift label further left
-                label,
-                fill=text_color,
-                font=font_small
-            )
-        
-        # Y axis label (use display_name if provided)
-        draw.text(
-            (15, 10),
-            force_cfg.displayName,
-            fill=text_color,
-            font=font
-        )
-
-    def _plot_point_on_graphique(self, sensor_id: SensorId, x_value: float, force: float):
-        """Add a point to the graphique (X=sensor_value, Y=FORCE) and draw line to previous point.
-        
-        Args:
-            sensor_id: Either SensorId.DISP_1 or SensorId.ARC to determine which graphique to plot on
-            x_value: The X-axis value (DISP_1 or ARC value)
-            force: The Y-axis value (FORCE)
-        """
-        if not self.is_running:
-            return
-        
-        # Select appropriate graphique and ranges from config
-        sensor_cfg = config_loader.get_sensor_config(sensor_id) or {}
-        if sensor_id == SensorId.DISP_1:
-            draw = self.graphique_disp1_draw
-            last_point = self.graphique_disp1_last_point
-            x_max = sensor_cfg.max
-            x_min = 0.0
-        elif sensor_id == SensorId.ARC:
-            draw = self.graphique_arc_draw
-            last_point = self.graphique_arc_last_point
-            arc_max = sensor_cfg.max
-            x_max = arc_max
-            x_min = -arc_max
-        else:
-            return
-        
-        if draw is None:
-            return
-        
-        # Scaling parameters (force range from config)
-        force_cfg = config_loader.get_sensor_config(SensorId.FORCE) or {}
-        force_max = force_cfg.max
-        x_range = x_max - x_min
-        
-        # Convert data to pixel coordinates
-        # X axis: left margin to right margin
-        pixel_x = self.graphique_margin + ((x_value - x_min) / x_range) * (self.graphique_width - 2 * self.graphique_margin)
-        # Y axis: inverted (top is 0, bottom is max)
-        pixel_y = self.graphique_height - self.graphique_margin - (force / force_max) * (self.graphique_height - 2 * self.graphique_margin)
-        
-        # Clamp to canvas bounds
-        pixel_x = max(self.graphique_margin, min(self.graphique_width - self.graphique_margin, pixel_x))
-        pixel_y = max(self.graphique_margin, min(self.graphique_height - self.graphique_margin, pixel_y))
-        
-        current_point = (pixel_x, pixel_y)
-        
-        # Draw line from last point to current point
-        if last_point is not None:
-            draw.line(
-                [last_point, current_point],
-                fill='black',
-                width=4
-            )
-        
-        # Update last point
-        if sensor_id == SensorId.DISP_1:
-            self.graphique_disp1_last_point = current_point
-        else:
-            self.graphique_arc_last_point = current_point
-
-    def _save_graphiques(self):
-        """Save both graphiques as PNG files in the test directory."""
-        if self.current_test_dir is None:
-            logger.warning("Cannot save graphiques: no test directory")
-            return
-        
-        # Save DISP_1 graphique
-        if self.graphique_disp1_image is not None:
-            disp1_path = os.path.join(self.current_test_dir, "graph_DISP_1.png")
-            try:
-                self.graphique_disp1_image.save(disp1_path, format='PNG')
-                logger.info(f"Saved DISP_1 graphique to {disp1_path}")
-            except Exception as e:
-                logger.error(f"Failed to save DISP_1 graphique: {e}")
-        
-        # Save ARC graphique
-        if self.graphique_arc_image is not None:
-            arc_path = os.path.join(self.current_test_dir, "graph_ARC.png")
-            try:
-                self.graphique_arc_image.save(arc_path, format='PNG')
-                logger.info(f"Saved ARC graphique to {arc_path}")
-            except Exception as e:
-                logger.error(f"Failed to save ARC graphique: {e}")
-
     def get_graphique_png(self, sensor_name: str) -> bytes:
         """Return the graphique as PNG bytes.
         
         Args:
             sensor_name: Either 'DISP_1' or 'ARC' to determine which graphique to return
         """
+        
         if sensor_name == 'DISP_1':
-            image = self.graphique_disp1_image
-        elif sensor_name == 'ARC':
-            image = self.graphique_arc_image
+            return self.graphique_disp1.get_graphique_png()
+        
         else:
-            image = None
-        
-        if image is None:
-            # Return a blank canvas if no test running
-            image = Image.new('RGBA', (self.graphique_width, self.graphique_height), (255, 255, 255, 0))
-        
-        # Convert to PNG bytes
-        buffer = io.BytesIO()
-        image.save(buffer, format='PNG')
-        return buffer.getvalue()
+            return self.graphique_arc.get_graphique_png()
 
     def get_description(self, test_id: str) -> str:
         """Get the description.md content for a test."""

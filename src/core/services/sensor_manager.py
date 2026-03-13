@@ -3,13 +3,12 @@ import time
 import logging
 import math
 import random
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 from core.config_loader import config_loader
 from core.models.config_data import calculatedConfigSensorData
 from core.models.sensor_data import SensorData
 from core.models.sensor_enum import SensorId
-from core.event_hub import event_hub
 from core.sensor_reconnection import SensorTask
 from core.services.serial_handler import create_serial_sensor_task
 
@@ -27,8 +26,7 @@ class SensorManager:
         self._thread: Optional[threading.Thread] = None
         self.offsets: list[float] = [0.0 for _ in SensorId]
         self._sensor_tasks: Dict[SensorId, SensorTask] = {}
-        event_hub.subscribe("serial_data", self._on_serial_data)
-        event_hub.subscribe("sensor_command", self._on_command)
+        self.notify_funcs: list[Callable[[SensorData], None]] = []
 
     def start(self, emulation=False, sensor_ports: Optional[Dict[SensorId, tuple[str, int]]] = None):
         """Start sensor data acquisition. If not in emulation, expects sensor_ports: Dict[SensorId, (port, baud)]"""
@@ -55,6 +53,7 @@ class SensorManager:
                     continue
                 full_port = PORT_PREFIX + port
                 task = create_serial_sensor_task(sensor_id, full_port, baud)
+                task.add_write_func(self._on_serial_data)
                 task.start()
                 self._sensor_tasks[sensor_id] = task
 
@@ -107,44 +106,42 @@ class SensorManager:
                 self._emulate_data(start_time)
             time.sleep(0.1) # Rate limit
 
-    def _on_serial_data(self, topic: str, line: tuple[SensorId, str]):
+    def _on_serial_data(self, sensorId: SensorId, time: float, line: str):
         # Only process if NOT in emulation mode
         if not self.emulation_mode:
             try:
-                sensorId, line_str = line
                 if sensorId == SensorId.FORCE:
-                    self._parse_force(sensorId, line_str)
+                    self._parse_force(sensorId, time, line)
                     
                 elif (sensorId == SensorId.DISP_1 or
                       sensorId == SensorId.DISP_2 or
                       sensorId == SensorId.DISP_3 or
                       sensorId == SensorId.DISP_4 or
                       sensorId == SensorId.DISP_5):
-                    self._parse_motion(sensorId, line_str)
+                    self._parse_motion(sensorId, time, line)
                     
             except Exception as e:
                 logger.warning(f"Error parsing line: {line} -> {e}")
 
-    def _on_command(self, topic, command):
-        if command.get("action") == "zero":
-            sensor_id = command.get("sensor_id")
-            if isinstance(sensor_id, SensorId):
-                current_val = self.sensors[sensor_id.value]
-                old_offset = self.offsets[sensor_id.value]
-                self.offsets[sensor_id.value] = old_offset + current_val
-                logger.info(f"Zeroed sensor {sensor_id}. New offset: {self.offsets[sensor_id.value]}")
+    def set_zero(self, sensor_id: SensorId):
+        """Manually zero a sensor by updating its offset."""
+        if sensor_id in SensorId:
+            current_val = self.sensors[sensor_id.value]
+            old_offset = self.offsets[sensor_id.value]
+            self.offsets[sensor_id.value] = old_offset + current_val
+            logger.info(f"Zeroed sensor {sensor_id}. New offset: {self.offsets[sensor_id.value]}")
 
-    def _parse_force(self, sensorId: SensorId, line: str):
+    def _parse_force(self, sensorId: SensorId, time: float, line: str):
         # ASC2 20945595 -165341 -1.527986e-01 -4.965955e+01 -0.000000e+00
         parts = line.split()
         if len(parts) >= 5:
             try:
                 val = float(parts[4]) # Calibrated value
-                self._notify(sensorId, val)
+                self._notify(sensorId, time, val)
             except ValueError:
                 pass
 
-    def _parse_motion(self, sensorId: SensorId, line: str):
+    def _parse_motion(self, sensorId: SensorId, time: float, line: str):
         # 76 144 262 us SPC_VAL usSenderId=0x2E01 ulMicros=76071216 Val=0.000
         parts = line.split()
         sender_id = None
@@ -159,7 +156,7 @@ class SensorManager:
                     pass
         
         if sender_id and val is not None:
-            self._notify(sensorId, val)
+            self._notify(sensorId, time, val)
 
     def _emulate_data(self, start_time):
         elapsed = time.time() - start_time
@@ -169,7 +166,7 @@ class SensorManager:
         # Emulate Force (Sine wave) only if enabled
         if config_loader.is_sensor_enabled(SensorId.FORCE):
             force_val = 500 + 500 * math.sin(elapsed) + random.uniform(-10, 10)
-            self._notify(SensorId.FORCE, force_val)
+            self._notify(SensorId.FORCE, time.time(), force_val)
 
         # Emulate Displacement (Linear + Noise) with per-sensor phase offsets to avoid overlap
         phase_offsets = {
@@ -191,31 +188,39 @@ class SensorManager:
                     SensorId.DISP_4: 1.20,
                     SensorId.DISP_5: 0.80,
                 }[sensor_id]
-                self._notify(sensor_id, disp_val * scale)
+                self._notify(sensor_id, time.time(), disp_val * scale)
 
-    def _notify(self, sensor_id: SensorId, value: float):
+    def _notify(self, sensor_id: SensorId, time: float, value: float):
         # Apply offset
         offset = self.offsets[sensor_id.value]
         corrected_value = value - offset
-
-
+        self.sensors[sensor_id.value] = corrected_value
 
         # Publish raw value (before offset correction)
-        raw_data = SensorData(
-            timestamp=time.time(),
-            sensor_id=sensor_id,
-            value=value,  # Raw uncorrected value
-        )
-        event_hub.send_all_on_topic("sensor_raw_update", raw_data)
-
-        # Publish corrected value
         data = SensorData(
-            timestamp=time.time(),
+            timestamp=time,
             sensor_id=sensor_id,
             value=corrected_value,
+            raw_timestamp=time,  
+            raw_value=value
         )
-        self.sensors[sensor_id.value] = corrected_value
-        event_hub.send_all_on_topic("sensor_update", data)
+        
+        for func in self.notify_funcs:
+            func(data)
+        
+    def add_write_func(self, sensor_id: SensorId, write_func: Callable[[SensorId, float, str], None]):
+        """Add a write function to a specific sensor task."""
+        if sensor_id in self._sensor_tasks:
+            self._sensor_tasks[sensor_id].add_write_func(write_func)
+            
+    def add_write_func(self, write_func: Callable[[SensorId, float, str], None]):
+        """Add a write function to all sensor tasks."""
+        for task in self._sensor_tasks.values():
+            task.add_write_func(write_func)
+            
+    def add_func_notify(self, func: Callable[[SensorData], None]):
+        """Add a function that will be called with new sensor data."""
+        self.notify_funcs.append(func)
 
 # Global instance
 sensor_manager = SensorManager()

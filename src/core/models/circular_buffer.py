@@ -172,7 +172,7 @@ class SensorDataStorage:
         Initialize sensor data storage with precomputed structures for speed.
         
         Args:
-            sensor_count: Number of sensors (e.g., 4 for FORCE, DISP_1, DISP_2, DISP_3)
+            sensor_count: Number of sensors (e.g., 7 for FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5, ARC)
             sampling_frequency: Sampling frequency in Hz (points per second)
         """
         self.sensor_count = sensor_count

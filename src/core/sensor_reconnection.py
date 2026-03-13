@@ -63,6 +63,7 @@ class SensorTask:
     def __init__(self, sensor_id: SensorId, read_func: Callable, max_silence_time: float = 5.0, monitor: Optional[SensorHealthMonitor] = None):
         self.sensor_id = sensor_id
         self.read_func = read_func  # async function to read sensor data
+        self.write_func: list[Callable[[SensorId, float, str], None]] = []  # list of async functions to write sensor data
         self.monitor = monitor if monitor is not None else SensorHealthMonitor(sensor_id, max_silence_time=max_silence_time)
         self._task: Optional[asyncio.Task] = None
         self._running = False
@@ -72,8 +73,11 @@ class SensorTask:
         while self._running:
             try:
                 data = await self.read_func()
+                data_time = time.time()
                 if data is not None:
                     self.monitor.record_data()
+                    for write in self.write_func:
+                        write(self.sensor_id, data_time, data)
                 else:
                     # No data received, check silence
                     if self.monitor.check_silence():
@@ -99,6 +103,9 @@ class SensorTask:
 
     def is_connected(self) -> bool:
         return self.monitor.state == SensorState.CONNECTED
+    
+    def add_write_func(self, write_func: Callable[[SensorId, float, str], None]):
+        self.write_func.append(write_func)
 
 # Example usage:
 # async def read_sensor():
