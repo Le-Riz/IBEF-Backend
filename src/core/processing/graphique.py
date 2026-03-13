@@ -180,15 +180,16 @@ class Graphique:
         
         current_point = (pixel_x, pixel_y)
         
-        # Draw line from last point to current point
-        if self.last_point is not None:
-            self.draw.line(
-                [self.last_point, current_point],
-                fill=self.config.line_color,
-                width=self.config.line_width
-            )
-        
-        self.last_point = current_point
+        if self.last_point != (0,0):
+            # Draw line from last point to current point
+            if self.last_point is not None:
+                self.draw.line(
+                    [self.last_point, current_point],
+                    fill=self.config.line_color,
+                    width=self.config.line_width
+                )
+            
+            self.last_point = current_point
         
     def save_graphique(self, directory: str|None, filename: str):
         if directory is None:
