@@ -2,13 +2,13 @@
 Description=Auto Launch IBEF Backend Service
 # Verify if project installed
 ConditionPathExists=<CHANGE_ME>/IBEF-Backend
+StartLimitIntervalSec=600
+StartLimitBurst=5
 
 [Service]
 Restart=on-failure
 RestartSec=10
 # Limit the number of restart attempts to 5 within a 10 minute window to prevent infinite restart loops
-StartLimitBurst=5
-StartLimitIntervalSec=600
 
 WorkingDirectory=<CHANGE_ME>/IBEF-Backend
 
