@@ -9,10 +9,12 @@ if ! command -v pipx >/dev/null 2>&1; then
 		sudo apt update
 		sudo apt install -y pipx
         pipx ensurepath
+        sudo pipx ensurepath --global
 	else
 		apt update
 		apt install -y pipx
         pipx ensurepath
+        pipx ensurepath --global
 	fi
 
 	if ! command -v pipx >/dev/null 2>&1; then
@@ -26,6 +28,6 @@ if command -v hatch >/dev/null 2>&1; then
 	exit 0
 else
     echo "Installing hatch"
-    pipx install hatch
+    pipx install --global hatch
 fi
 
