@@ -1,7 +1,7 @@
 [Unit]
 Description=Auto Launch IBEF Backend Service
 # Verify if project installed
-ConditionPathExists=<CHANGE_ME>/IBEF-Backend
+ConditionPathExists=<CHANGE_ME>
 StartLimitIntervalSec=600
 StartLimitBurst=5
 
@@ -10,7 +10,7 @@ Restart=on-failure
 RestartSec=10
 # Limit the number of restart attempts to 5 within a 10 minute window to prevent infinite restart loops
 
-WorkingDirectory=<CHANGE_ME>/IBEF-Backend
+WorkingDirectory=<CHANGE_ME>
 
 # Make sure the scripts are executable before starting the service
 ExecStartPre=/bin/bash -c "chmod +x scripts/hatch_check.sh"
