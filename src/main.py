@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings
 from contextlib import asynccontextmanager
 import os
@@ -49,7 +50,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/", tags=["meta"])
 async def read_root() -> dict[str, str]:
