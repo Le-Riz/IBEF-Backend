@@ -27,6 +27,7 @@ class SensorManager:
         self.offsets: list[float] = [0.0 for _ in SensorId]
         self._sensor_tasks: Dict[SensorId, SensorTask] = {}
         self.notify_funcs: list[Callable[[SensorData], None]] = []
+        self.want_zero: bool = False
 
     def start(self, emulation=False, sensor_ports: Optional[Dict[SensorId, tuple[str, int]]] = None):
         """Start sensor data acquisition. If not in emulation, expects sensor_ports: Dict[SensorId, (port, baud)]"""
@@ -126,16 +127,7 @@ class SensorManager:
     def set_zero(self, sensor_id: SensorId):
         """Manually zero a sensor by updating its offset."""
         if sensor_id in SensorId:
-            current_val = self.sensors[sensor_id.value]
-            
-            #TODO: Consider if we should allow zeroing when value is NaN, or if we should require a valid reading first. For now, we will prevent zeroing if current value is NaN to avoid setting an offset based on invalid data.
-            if math.isnan(current_val):
-                logger.warning(f"Cannot zero sensor {sensor_id} because current value is NaN")
-                return
-            
-            old_offset = self.offsets[sensor_id.value]
-            self.offsets[sensor_id.value] = old_offset + current_val
-            logger.info(f"Zeroed sensor {sensor_id}. New offset: {self.offsets[sensor_id.value]}")
+            self.want_zero = True
 
     def _parse_force(self, sensorId: SensorId, time: float, line: str):
         # ASC2 20945595 -165341 -1.527986e-01 -4.965955e+01 -0.000000e+00
@@ -197,6 +189,13 @@ class SensorManager:
                 self._notify(sensor_id, time.time(), disp_val * scale)
 
     def _notify(self, sensor_id: SensorId, time: float, value: float):
+        if self.want_zero:
+            if not math.isnan(value):
+                old_offset = self.offsets[sensor_id.value]
+                self.offsets[sensor_id.value] = old_offset + value
+                self.want_zero = False
+                logger.info(f"Zeroed sensor {sensor_id}. New offset: {self.offsets[sensor_id.value]}")
+        
         # Apply offset
         offset = self.offsets[sensor_id.value]
         corrected_value = value - offset
