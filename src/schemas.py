@@ -18,12 +18,13 @@ class Point(BaseModel):
     time: float
     value: float
 
-class DictPoint(BaseModel):
-    points: dict[SensorId, Point]
-
 class OffsetResponse(BaseModel):
     offset: float
 
+class DictPoint(BaseModel):
+    raw: dict[SensorId, Point]
+    data: dict[SensorId, Point]
+    zeros: dict[SensorId, OffsetResponse]
 
 class PointsList(BaseModel):
     list: List[Point]

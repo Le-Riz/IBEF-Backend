@@ -12,7 +12,30 @@ VALID_SENSOR_VALUES = ", ".join([s.name for s in SensorId])
 
 router = APIRouter(prefix="/sensor", tags=["sensor"])
 
-# TODO: Add API call to get all points of sensors at once
+@router.get("", response_model=DictPoint, responses={})
+async def get_sensors_all() -> DictPoint:
+    """
+    Get the latest data points from all sensors, including raw values, calibrated values, and zero offsets.
+    """
+    points: DictPoint = DictPoint(__root__={})
+    for sensor in SensorId:
+        points.raw[sensor] = Point(time=test_manager.get_relative_time(), value=0)
+        points.data[sensor] = Point(time=test_manager.get_relative_time(), value=0)
+        points.zeros[sensor] = OffsetResponse(offset=0)
+        if sensor_manager.is_sensor_connected(sensor):
+            idx = sensor.value
+            corrected = sensor_manager.sensors[idx]
+            offset = sensor_manager.offsets[idx]
+            raw_value = corrected + offset
+            points.raw[sensor].value = raw_value
+            points.data[sensor].value = corrected
+            points.zeros[sensor].offset = sensor_manager.offsets[sensor.value]
+        else:
+            points.raw[sensor].value = math.nan
+            points.data[sensor].value = math.nan
+            points.zeros[sensor].offset = math.nan
+            
+    return points
 
 @router.get("/{sensor_id}/data", response_model=Point, responses={
     400: {
@@ -58,23 +81,6 @@ async def get_sensor_data(sensor_id: str) -> Point:
     relative_time = test_manager.get_relative_time()
     return Point(time=relative_time, value=corrected)
 
-
-@router.get("/sensors/data", response_model=DictPoint, responses={})
-async def get_sensors_data() -> DictPoint:
-    """
-    Get the latest data point from all sensors (calibrated/processed values).
-    """
-    points: DictPoint = DictPoint(__root__={})
-    for sensor in SensorId:
-        points.points[sensor] = Point(time=test_manager.get_relative_time(), value=0)
-        if sensor_manager.is_sensor_connected(sensor):
-            idx = sensor.value
-            corrected = sensor_manager.sensors[idx]
-            points.points[sensor].value = corrected
-        else:
-            points.points[sensor].value = math.nan
-
-    return points
 
 @router.get("/{sensor_id}/data/history", response_model=PointsList, responses={
     400: {
@@ -190,26 +196,6 @@ async def get_sensor_raw_data(sensor_id: str) -> Point:
     raw_value = corrected + offset
     relative_time = test_manager.get_relative_time()
     return Point(time=relative_time, value=raw_value)
-
-@router.get("/sensors/raw", response_model=DictPoint, responses={})
-async def get_sensors_raw_data() -> DictPoint:
-    """
-    Get the latest raw (uncalibrated) data point from a sensor.
-    Time is relative to test start if a test is running, otherwise 0.
-    """
-    points: DictPoint = DictPoint(__root__={})
-    for sensor in SensorId:
-        points.points[sensor] = Point(time=test_manager.get_relative_time(), value=0)
-        if sensor_manager.is_sensor_connected(sensor):
-            idx = sensor.value
-            corrected = sensor_manager.sensors[idx]
-            offset = sensor_manager.offsets[idx]
-            raw_value = corrected + offset
-            points.points[sensor].value = raw_value
-        else:
-            points.points[sensor].value = math.nan
-
-    return points
 
 @router.get("/{sensor_id}/zero", response_model=OffsetResponse, responses={
     400: {
