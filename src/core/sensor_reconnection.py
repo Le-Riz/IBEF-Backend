@@ -1,5 +1,3 @@
-
-# SIMPLIFIED SENSOR RECONNECTION LOGIC
 import asyncio
 import logging
 import time
@@ -72,8 +70,7 @@ class SensorTask:
         self._running = True
         while self._running:
             try:
-                data = await self.read_func()
-                data_time = time.time()
+                (data, data_time) = await self.read_func()
                 if data is not None:
                     self.monitor.record_data()
                     for write in self.write_func:
@@ -98,6 +95,12 @@ class SensorTask:
 
     def stop(self):
         self._running = False
+        close_reader = getattr(self.read_func, "close", None)
+        if callable(close_reader):
+            try:
+                close_reader()
+            except Exception as e:
+                logger.warning(f"[Sensor {self.sensor_id}] Error while closing reader: {e}")
         if self._task:
             self._task.cancel()
 
@@ -106,9 +109,3 @@ class SensorTask:
     
     def add_write_func(self, write_func: Callable[[SensorId, float, str], None]):
         self.write_func.append(write_func)
-
-# Example usage:
-# async def read_sensor():
-#     ...
-# sensor_task = SensorTask(SensorId.FORCE, read_sensor)
-# sensor_task.start()
