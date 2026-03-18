@@ -21,16 +21,12 @@ class SerialHandler:
         self.port = port
         self.timeout = serial_timeout
         self.serial = None
-        try:
-            self.serial = serial.Serial(port=self.port, baudrate=self.baudrate, timeout=self.timeout)
-            logger.info(f"SerialHandler for {sensor_id.name} connected to {self.port} at {self.baudrate} baud.")
-        except Exception as e:
-            logger.error(f"Failed to connect SerialHandler for {sensor_id.name} on {self.port}: {e}")
         self.sensor_id = sensor_id
         self.queue = queue
         self.running = False
         
     def start(self):
+        self.running = True
         asyncio.create_task(self.read_serial())
         for sig in (SIGINT, SIGTERM):
             asyncio.get_event_loop().add_signal_handler(sig, self.stop)
@@ -55,7 +51,11 @@ class SerialHandler:
                 line = self.serial.readline()
                 if line:
                     decoded_line = line.decode('utf-8').strip()
-                    self.queue.put((self.sensor_id, decoded_line, time.time()))
+                    if self.queue.full():
+                        self.queue.get_nowait()
+                        self.queue.put_nowait((self.sensor_id, decoded_line, time.time()))
+                    else:
+                        self.queue.put_nowait((self.sensor_id, decoded_line, time.time()))
                     
             except Exception as e:
                 logger.error(f"Error reading from serial port for {self.sensor_id}: {e}")
