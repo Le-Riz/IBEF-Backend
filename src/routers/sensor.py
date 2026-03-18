@@ -66,13 +66,13 @@ async def get_sensors_data() -> DictPoint:
     """
     points: DictPoint = DictPoint(__root__={})
     for sensor in SensorId:
-        points.__root__[sensor.name] = Point(time=test_manager.get_relative_time(), value=0)
+        points.points[sensor.name] = Point(time=test_manager.get_relative_time(), value=0)
         if sensor_manager.is_sensor_connected(sensor):
             idx = sensor.value
             corrected = sensor_manager.sensors[idx]
-            points.__root__[sensor.name].value = corrected
+            points.points[sensor.name].value = corrected
         else:
-            points.__root__[sensor.name].value = math.nan
+            points.points[sensor.name].value = math.nan
 
     return points
 
@@ -199,15 +199,15 @@ async def get_sensors_raw_data() -> DictPoint:
     """
     points: DictPoint = DictPoint(__root__={})
     for sensor in SensorId:
-        points.__root__[sensor.name] = Point(time=test_manager.get_relative_time(), value=0)
+        points.points[sensor.name] = Point(time=test_manager.get_relative_time(), value=0)
         if sensor_manager.is_sensor_connected(sensor):
             idx = sensor.value
             corrected = sensor_manager.sensors[idx]
             offset = sensor_manager.offsets[idx]
             raw_value = corrected + offset
-            points.__root__[sensor.name].value = raw_value
+            points.points[sensor.name].value = raw_value
         else:
-            points.__root__[sensor.name].value = math.nan
+            points.points[sensor.name].value = math.nan
 
     return points
 

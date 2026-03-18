@@ -18,7 +18,7 @@ class Point(BaseModel):
     value: float
 
 class DictPoint(BaseModel):
-    __root__: dict[str, Point]
+    points: dict[str, Point]
 
 class OffsetResponse(BaseModel):
     offset: float
