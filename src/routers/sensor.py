@@ -6,11 +6,13 @@ from core.models.circular_buffer import DisplayDuration
 from core.services.sensor_manager import sensor_manager
 from core.services.test_manager import test_manager
 
-from schemas import Point, PointsList, OffsetResponse
+from schemas import DictPoint, Point, PointsList, OffsetResponse
 
 VALID_SENSOR_VALUES = ", ".join([s.name for s in SensorId])
 
 router = APIRouter(prefix="/sensor", tags=["sensor"])
+
+# TODO: Add API call to get all points of sensors at once
 
 @router.get("/{sensor_id}/data", response_model=Point, responses={
     400: {
@@ -56,6 +58,23 @@ async def get_sensor_data(sensor_id: str) -> Point:
     relative_time = test_manager.get_relative_time()
     return Point(time=relative_time, value=corrected)
 
+
+@router.get("/sensors/data", response_model=DictPoint, responses={})
+async def get_sensors_data() -> DictPoint:
+    """
+    Get the latest data point from all sensors (calibrated/processed values).
+    """
+    points: DictPoint = DictPoint(__root__={})
+    for sensor in SensorId:
+        points.__root__[sensor.name] = Point(time=test_manager.get_relative_time(), value=0)
+        if sensor_manager.is_sensor_connected(sensor):
+            idx = sensor.value
+            corrected = sensor_manager.sensors[idx]
+            points.__root__[sensor.name].value = corrected
+        else:
+            points.__root__[sensor.name].value = math.nan
+
+    return points
 
 @router.get("/{sensor_id}/data/history", response_model=PointsList, responses={
     400: {
@@ -172,6 +191,25 @@ async def get_sensor_raw_data(sensor_id: str) -> Point:
     relative_time = test_manager.get_relative_time()
     return Point(time=relative_time, value=raw_value)
 
+@router.get("/sensors/raw", response_model=DictPoint, responses={})
+async def get_sensors_raw_data() -> DictPoint:
+    """
+    Get the latest raw (uncalibrated) data point from a sensor.
+    Time is relative to test start if a test is running, otherwise 0.
+    """
+    points: DictPoint = DictPoint(__root__={})
+    for sensor in SensorId:
+        points.__root__[sensor.name] = Point(time=test_manager.get_relative_time(), value=0)
+        if sensor_manager.is_sensor_connected(sensor):
+            idx = sensor.value
+            corrected = sensor_manager.sensors[idx]
+            offset = sensor_manager.offsets[idx]
+            raw_value = corrected + offset
+            points.__root__[sensor.name].value = raw_value
+        else:
+            points.__root__[sensor.name].value = math.nan
+
+    return points
 
 @router.get("/{sensor_id}/zero", response_model=OffsetResponse, responses={
     400: {

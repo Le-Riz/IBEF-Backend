@@ -17,6 +17,8 @@ class Point(BaseModel):
     time: float
     value: float
 
+class DictPoint(BaseModel):
+    __root__: dict[str, Point]
 
 class OffsetResponse(BaseModel):
     offset: float
