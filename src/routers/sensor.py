@@ -19,21 +19,21 @@ async def get_sensors_all() -> DictPoint:
     """
     points: DictPoint = DictPoint(raw={}, data={}, zeros={})
     for sensor in SensorId:
-        points.raw[sensor] = Point(time=test_manager.get_relative_time(), value=0)
-        points.data[sensor] = Point(time=test_manager.get_relative_time(), value=0)
-        points.zeros[sensor] = OffsetResponse(offset=0)
+        points.raw[sensor.name] = Point(time=test_manager.get_relative_time(), value=0)
+        points.data[sensor.name] = Point(time=test_manager.get_relative_time(), value=0)
+        points.zeros[sensor.name] = OffsetResponse(offset=0)
         if sensor_manager.is_sensor_connected(sensor):
             idx = sensor.value
             corrected = sensor_manager.sensors[idx]
             offset = sensor_manager.offsets[idx]
             raw_value = corrected + offset
-            points.raw[sensor].value = raw_value
-            points.data[sensor].value = corrected
-            points.zeros[sensor].offset = sensor_manager.offsets[sensor.value]
+            points.raw[sensor.name].value = raw_value
+            points.data[sensor.name].value = corrected
+            points.zeros[sensor.name].offset = sensor_manager.offsets[sensor.value]
         else:
-            points.raw[sensor].value = math.nan
-            points.data[sensor].value = math.nan
-            points.zeros[sensor].offset = math.nan
+            points.raw[sensor.name].value = math.nan
+            points.data[sensor.name].value = math.nan
+            points.zeros[sensor.name].offset = math.nan
             
     return points
 

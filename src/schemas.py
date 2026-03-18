@@ -22,9 +22,9 @@ class OffsetResponse(BaseModel):
     offset: float
 
 class DictPoint(BaseModel):
-    raw: dict[SensorId, Point]
-    data: dict[SensorId, Point]
-    zeros: dict[SensorId, OffsetResponse]
+    raw: dict[str, Point]
+    data: dict[str, Point]
+    zeros: dict[str, OffsetResponse]
 
 class PointsList(BaseModel):
     list: List[Point]
