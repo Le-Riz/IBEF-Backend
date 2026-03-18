@@ -1,4 +1,5 @@
 from typing import List, Any, Union
+from core.models.sensor_enum import SensorId
 from pydantic import BaseModel
 from core.models.test_data import TestMetaData
 from core.models.test_state import TestState
@@ -18,7 +19,7 @@ class Point(BaseModel):
     value: float
 
 class DictPoint(BaseModel):
-    points: dict[str, Point]
+    points: dict[SensorId, Point]
 
 class OffsetResponse(BaseModel):
     offset: float
