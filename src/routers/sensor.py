@@ -17,7 +17,7 @@ async def get_sensors_all() -> DictPoint:
     """
     Get the latest data points from all sensors, including raw values, calibrated values, and zero offsets.
     """
-    points: DictPoint = DictPoint(__root__={})
+    points: DictPoint = DictPoint(raw={}, data={}, zeros={})
     for sensor in SensorId:
         points.raw[sensor] = Point(time=test_manager.get_relative_time(), value=0)
         points.data[sensor] = Point(time=test_manager.get_relative_time(), value=0)
