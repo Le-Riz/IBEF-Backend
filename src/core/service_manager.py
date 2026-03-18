@@ -4,10 +4,7 @@ import logging
 
 # Internal libs
 from core.models.config_data import configSensorData
-from core.models.sensor_enum import SensorId
 from core.services.sensor_manager import sensor_manager
-from core.services.test_manager import test_manager
-from core.processing.data_processor import data_processor
 from core.config_loader import config_loader
 
 
@@ -22,8 +19,6 @@ class ServiceManager:
             emulation: When True, start `SensorManager` in emulation mode and skip serial reader.
         """
         logger.info("Starting background services...")
-        # Data Processor (publishes processed_data at fixed rate)
-        data_processor.start()
         # Sensor Manager: in hardware mode, pass detected sensor ports/bauds
         if emulation:
             sensor_manager.start(emulation=True)

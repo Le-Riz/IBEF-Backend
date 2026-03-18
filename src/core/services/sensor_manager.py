@@ -1,3 +1,5 @@
+import os
+import queue
 import threading
 import time
 import logging
@@ -9,8 +11,8 @@ from core.config_loader import config_loader
 from core.models.config_data import calculatedConfigSensorData
 from core.models.sensor_data import SensorData
 from core.models.sensor_enum import SensorId
-from core.sensor_reconnection import SensorTask
-from core.services.serial_handler import create_serial_sensor_task
+from core.sensor_reconnection import SensorsTask
+from core.services.serial_handler import SerialHandler
 
 logger = logging.getLogger(__name__)
 PORT_PREFIX = "/dev/serial/by-id/"
@@ -22,12 +24,19 @@ class SensorManager:
     def __init__(self):
         self.running = False
         self.emulation_mode = False
-        self.sensors: list[float] = [0.0 for _ in SensorId]
+        self.sensors: list[SensorData] = [SensorData(0.0, id, math.nan, math.nan) for id in SensorId]
         self._thread: Optional[threading.Thread] = None
         self.offsets: list[float] = [0.0 for _ in SensorId]
-        self._sensor_tasks: Dict[SensorId, SensorTask] = {}
+        self._serial_handlers: list[SerialHandler] = []
+        self.queue: queue.Queue[tuple[SensorId, str, float]] = queue.Queue(maxsize=1024)
+        self._sensors_task: SensorsTask = SensorsTask(self.queue)
         self.notify_funcs: list[Callable[[SensorData], None]] = []
         self.want_zero: bool = False
+        self.sensor_ports: list[str] = [""] * len(SensorId)
+        arc_config = config_loader.get_sensor_config(SensorId.ARC)
+        self.arc_sensor_dependencies: list[SensorId] = []
+        if isinstance(arc_config, calculatedConfigSensorData):
+            self.arc_sensor_dependencies: list[SensorId] = [dep.id for dep in arc_config.dependencies]
 
     def start(self, emulation=False, sensor_ports: Optional[Dict[SensorId, tuple[str, int]]] = None):
         """Start sensor data acquisition. If not in emulation, expects sensor_ports: Dict[SensorId, (port, baud)]"""
@@ -52,11 +61,15 @@ class SensorManager:
                 if port == "":
                     logger.warning(f"Sensor {sensor_id} has no assigned port, skipping...")
                     continue
+                self.sensor_ports[sensor_id.value] = port
                 full_port = PORT_PREFIX + port
-                task = create_serial_sensor_task(sensor_id, full_port, baud)
-                task.add_write_func(self._on_serial_data)
-                task.start()
-                self._sensor_tasks[sensor_id] = task
+                serial_handler = SerialHandler(sensor_id=sensor_id, port=full_port, queue=self.queue, 
+                                               baudrate=baud, serial_timeout=0.5)
+                
+                serial_handler.start()
+                self._serial_handlers.append(serial_handler)
+            
+            self._sensors_task.start()
 
     def set_mode(self, emulation: bool):
         """Set the operation mode (emulation or real hardware)."""
@@ -78,15 +91,12 @@ class SensorManager:
         
         # Hardware mode: check if we have a running SensorTask
         if sensor_id == SensorId.ARC:
-            arc_config = config_loader.get_sensor_config(sensor_id)
-            if not isinstance(arc_config, calculatedConfigSensorData):
-                return False
-            for sensor in arc_config.dependencies:
-                if not self.is_sensor_connected(sensor.id):
+            for sensor in self.arc_sensor_dependencies:
+                if not self.is_sensor_connected(sensor):
                     return False
             return True
-            
-        return sensor_id in self._sensor_tasks and self._sensor_tasks[sensor_id].is_connected()
+        
+        return os.path.exists(self.sensor_ports[sensor_id.value])
     
     def stop(self):
         """Stop sensor data acquisition."""
@@ -94,10 +104,11 @@ class SensorManager:
         if self._thread:
             self._thread.join()
             self._thread = None
-        # Stop all sensor tasks
-        for task in self._sensor_tasks.values():
-            task.stop()
-        self._sensor_tasks.clear()
+        # Stop all serial handlers
+        for handler in self._serial_handlers:
+            handler.stop()
+        self._serial_handlers.clear()
+        self._sensors_task.stop()
         logger.info("SensorManager stopped")
 
     def _loop(self):
@@ -156,6 +167,19 @@ class SensorManager:
         if sender_id and val is not None:
             self._notify(sensorId, time, val)
 
+    def _calculate_arc(self, data: SensorData):
+        if (data.sensor_id in self.arc_sensor_dependencies):
+            if(not math.isnan(self.sensors[SensorId.DISP_1.value].value) and
+               not math.isnan(self.sensors[SensorId.DISP_2.value].value) and
+               not math.isnan(self.sensors[SensorId.DISP_3.value].value)):
+                self.sensors[SensorId.ARC.value].raw_value = self.sensors[SensorId.DISP_1.value].raw_value - (self.sensors[SensorId.DISP_2.value].raw_value + self.sensors[SensorId.DISP_3.value].raw_value) / 2
+                self.sensors[SensorId.ARC.value].value = self.sensors[SensorId.DISP_1.value].value - (self.sensors[SensorId.DISP_2.value].value + self.sensors[SensorId.DISP_3.value].value) / 2
+                self.sensors[SensorId.ARC.value].offset = self.sensors[SensorId.DISP_1.value].offset - (self.sensors[SensorId.DISP_2.value].offset + self.sensors[SensorId.DISP_3.value].offset) / 2
+                self.sensors[SensorId.ARC.value].timestamp = data.timestamp
+
+                return self.sensors[SensorId.ARC.value]
+        return None
+
     def _emulate_data(self, start_time):
         elapsed = time.time() - start_time
 
@@ -191,37 +215,36 @@ class SensorManager:
     def _notify(self, sensor_id: SensorId, time: float, value: float):
         if self.want_zero:
             if not math.isnan(value):
-                old_offset = self.offsets[sensor_id.value]
-                self.offsets[sensor_id.value] = old_offset + value
+                self.offsets[sensor_id.value] = value
                 self.want_zero = False
                 logger.info(f"Zeroed sensor {sensor_id}. New offset: {self.offsets[sensor_id.value]}")
         
         # Apply offset
         offset = self.offsets[sensor_id.value]
         corrected_value = value - offset
-        self.sensors[sensor_id.value] = corrected_value
 
         # Publish raw value (before offset correction)
         data = SensorData(
             timestamp=time,
             sensor_id=sensor_id,
             value=corrected_value,
-            raw_timestamp=time,  
-            raw_value=value
+            raw_value=value,
+            offset=offset
         )
+        
+        self.sensors[sensor_id.value] = data
         
         for func in self.notify_funcs:
             func(data)
-        
-    def add_write_func(self, sensor_id: SensorId, write_func: Callable[[SensorId, float, str], None]):
-        """Add a write function to a specific sensor task."""
-        if sensor_id in self._sensor_tasks:
-            self._sensor_tasks[sensor_id].add_write_func(write_func)
             
-    def add_write_funcs(self, write_func: Callable[[SensorId, float, str], None]):
-        """Add a write function to all sensor tasks."""
-        for task in self._sensor_tasks.values():
-            task.add_write_func(write_func)
+        if self._calculate_arc(data) is not None:
+            arc_data = self.sensors[SensorId.ARC.value]
+            for func in self.notify_funcs:
+                func(arc_data)
+        
+    def add_write_func(self, write_func: Callable[[SensorId, float, str], None]):
+        """Add a write function to sensors task."""
+        self._sensors_task.add_write_func(write_func)
             
     def add_func_notify(self, func: Callable[[SensorData], None]):
         """Add a function that will be called with new sensor data."""

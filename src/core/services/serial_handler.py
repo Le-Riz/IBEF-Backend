@@ -1,89 +1,62 @@
 import asyncio
-from typing import Optional, Callable, Awaitable
+import queue
+import logging
+import time
 import serial
 from core.models.sensor_enum import SensorId
-from core.sensor_reconnection import SensorHealthMonitor, SensorTask, SensorState
+from signal import SIGINT, SIGTERM
 
-def make_serial_read_func(
-    sensor_id: SensorId,
-    port: str,
-    baudrate: int = 9600,
-    monitor=None,
-    serial_timeout: float = 0.5,
-) -> Callable[[], Awaitable[Optional[str]]]:
-    """
-    Returns an async function that reads one line from the serial port for the sensor.
-    The function returns the line if data is received, or None if not.
-    Automatically closes and reopens the port on error to recover from I/O errors.
-    Logs only once on disconnect and once on reconnect.
-    Updates the SensorHealthMonitor state directly.
-    """
-    import logging
-    logger = logging.getLogger(__name__)
-    ser = None
-    connected = False
-    async def read_func():
-        nonlocal ser, connected
+logger = logging.getLogger(__name__)
+
+class SerialHandler:
+    def __init__(self, 
+        sensor_id: SensorId,
+        port: str,
+        queue: queue.Queue[tuple[SensorId, str, float]],
+        baudrate: int = 9600,
+        serial_timeout: float = 0.5,
+    ):
+        
+        self.baudrate = baudrate
+        self.port = port
+        self.timeout = serial_timeout
+        self.serial = None
         try:
-            if ser is None:
-                ser = serial.Serial(port, baudrate, timeout=serial_timeout)
-                if not connected:
-                    logger.warning(f"[Serial] {sensor_id} connected on {port} @ {baudrate} baud")
-                    connected = True
-                    if monitor is not None:
-                        monitor.state = SensorState.CONNECTED
-                        monitor.record_data()
-            raw_line = await asyncio.to_thread(ser.readline)
-            if not raw_line:
-                return None
-            try:
-                line = raw_line.decode('utf-8').strip()
-                if line:
-                    #event_hub.send_all_on_topic("serial_data", (sensor_id, line))
-                    if monitor is not None:
-                        monitor.record_data()
-                    return line
-            except UnicodeDecodeError:
-                logger.warning(f"Error decoding serial data from {sensor_id} ({port})")
-            return None
-        except (serial.SerialException, OSError) as e:
-            if connected:
-                logger.warning(f"[Serial] {sensor_id} disconnected from {port}: {e}")
-                connected = False
-                if monitor is not None:
-                    monitor.state = SensorState.DISCONNECTED
-            if ser is not None:
-                try:
-                    ser.close()
-                except Exception:
-                    pass
-                ser = None
-            await asyncio.sleep(1.0)
-            return None
+            self.serial = serial.Serial(port=self.port, baudrate=self.baudrate, timeout=self.timeout)
+            logger.info(f"SerialHandler for {sensor_id.name} connected to {self.port} at {self.baudrate} baud.")
         except Exception as e:
-            if connected:
-                logger.warning(f"[Serial] {sensor_id} disconnected from {port}: {e}")
-                connected = False
-                if monitor is not None:
-                    monitor.state = SensorState.DISCONNECTED
-            if ser is not None:
-                try:
-                    ser.close()
-                except Exception:
-                    pass
-                ser = None
-            await asyncio.sleep(1.0)
-            return None
-    return read_func
-
-# Factory to create a SensorTask for a serial sensor
-def create_serial_sensor_task(
-    sensor_id: SensorId,
-    port: str,
-    baudrate: int = 9600,
-    max_silence_time: float = 5.0,
-    serial_timeout: float = 0.5,
-) -> SensorTask:
-    monitor = SensorHealthMonitor(sensor_id, max_silence_time=max_silence_time)
-    read_func = make_serial_read_func(sensor_id, port, baudrate, monitor=monitor, serial_timeout=serial_timeout)
-    return SensorTask(sensor_id, read_func, max_silence_time=max_silence_time, monitor=monitor)
+            logger.error(f"Failed to connect SerialHandler for {sensor_id.name} on {self.port}: {e}")
+        self.sensor_id = sensor_id
+        self.queue = queue
+        self.running = False
+        
+    def start(self):
+        asyncio.create_task(self.read_serial())
+        for sig in (SIGINT, SIGTERM):
+            asyncio.get_event_loop().add_signal_handler(sig, self.stop)
+    
+    def stop(self):
+        self.running = False
+        if self.serial and self.serial.is_open:
+            self.serial.close()
+    
+    async def read_serial(self):
+        while self.running:
+            try:
+                if self.serial is None:
+                    try:
+                        self.serial = serial.Serial(port=self.port, baudrate=self.baudrate, timeout=self.timeout)
+                        logger.info(f"SerialHandler for {self.sensor_id.name} reconnected to {self.port} at {self.baudrate} baud.")
+                    except Exception as e:
+                        logger.error(f"Failed to reconnect SerialHandler for {self.sensor_id.name} on {self.port}: {e}")
+                        await asyncio.sleep(0.5)
+                        continue
+                
+                line = self.serial.readline()
+                if line:
+                    decoded_line = line.decode('utf-8').strip()
+                    self.queue.put((self.sensor_id, decoded_line, time.time()))
+                    
+            except Exception as e:
+                logger.error(f"Error reading from serial port for {self.sensor_id}: {e}")
+                await asyncio.sleep(1.0)
