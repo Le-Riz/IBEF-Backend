@@ -70,7 +70,8 @@ class SensorTask:
         self._running = True
         while self._running:
             try:
-                (data, data_time) = await self.read_func()
+                data = await self.read_func()
+                data_time = time.time()
                 if data is not None:
                     self.monitor.record_data()
                     for write in self.write_func:
@@ -95,12 +96,6 @@ class SensorTask:
 
     def stop(self):
         self._running = False
-        close_reader = getattr(self.read_func, "close", None)
-        if callable(close_reader):
-            try:
-                close_reader()
-            except Exception as e:
-                logger.warning(f"[Sensor {self.sensor_id}] Error while closing reader: {e}")
         if self._task:
             self._task.cancel()
 
