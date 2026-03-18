@@ -1,5 +1,7 @@
 {
-  "emulation": true,
+  "emulation": [
+    "FORCE"
+  ],
   "sensors": {
     "FORCE": {
       "baud": 115200,
@@ -50,11 +52,15 @@
       "enabled": true
     }
   },
-  "calculated_sensors" : {
+  "calculated_sensors": {
     "ARC": {
       "description": "Calculated arc (circular deflection)",
       "display_name": "Fleche d'arc (mm)",
-      "dependencies": ["DISP_1","DISP_2","DISP_3"],
+      "dependencies": [
+        "DISP_1",
+        "DISP_2",
+        "DISP_3"
+      ],
       "max": 5
     }
   }

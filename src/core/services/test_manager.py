@@ -464,7 +464,7 @@ class TestManager:
         except Exception:
             sensor_manager = None
 
-        if sensor_manager and sensor_manager.emulation_mode:
+        if sensor_manager and sensor_manager.emulated_sensors:
             if self.emulation_start_time is None:
                 self.emulation_start_time = time.time()
             return time.time() - self.emulation_start_time

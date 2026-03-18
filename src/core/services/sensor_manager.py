@@ -24,7 +24,7 @@ class SensorManager:
     """
     def __init__(self):
         self.running = False
-        self.emulation_mode = False
+        self.emulated_sensors: list[SensorId] = []
         self.sensors: list[SensorData] = [SensorData(0.0, id, math.nan, math.nan) for id in SensorId]
         self._emulation_task: Optional[asyncio.Task] = None
         self.offsets: list[float] = [0.0 for _ in SensorId]
@@ -41,26 +41,30 @@ class SensorManager:
         
         self.add_write_func(self._on_serial_data)
 
-    def start(self, emulation=False, sensor_ports: Optional[Dict[SensorId, tuple[str, int]]] = None):
-        """Start sensor data acquisition. If not in emulation, expects sensor_ports: Dict[SensorId, (port, baud)]"""
+    def start(self, emulated_sensors: Optional[list[SensorId]] = None, sensor_ports: Optional[Dict[SensorId, tuple[str, int]]] = None):
+        """Start sensor data acquisition."""
+        emulated_sensors = emulated_sensors or []
         if self.running:
-            if self.emulation_mode != emulation:
+            if set(self.emulated_sensors) != set(emulated_sensors):
                 self.stop()
             else:
                 return
 
-        self.emulation_mode = emulation
+        self.emulated_sensors = emulated_sensors
         self.running = True
-        logger.info(f"SensorManager started (Emulation: {emulation})")
+        logger.info(f"SensorManager started (Emulation: {[s.name for s in emulated_sensors]})")
 
-        if self.emulation_mode:
+        if self.emulated_sensors:
             self._emulation_task = asyncio.create_task(self._emulation_loop())
-            self._sensors_task.start()
-        else:
-            # Launch a SensorTask for each real sensor
-            if sensor_ports is None:
-                raise ValueError("sensor_ports must be provided in hardware mode")
+            
+        if sensor_ports is None and not self.emulated_sensors:
+            logger.warning("No sensor ports provided and no emulation requested.")
+            
+        if sensor_ports is not None:
+            # Launch a SensorTask for each real sensor NOT in emulated_sensors
             for sensor_id, (port, baud) in sensor_ports.items():
+                if sensor_id in self.emulated_sensors:
+                    continue
                 if port == "":
                     logger.warning(f"Sensor {sensor_id} has no assigned port, skipping...")
                     continue
@@ -71,16 +75,16 @@ class SensorManager:
                 
                 serial_handler.start()
                 self._serial_handlers.append(serial_handler)
-            
-            self._sensors_task.start()
+        
+        self._sensors_task.start()
 
-    def set_mode(self, emulation: bool):
+    def set_mode(self, emulated_sensors: list[SensorId]):
         """Set the operation mode (emulation or real hardware)."""
         if self.running:
             self.stop()
-            self.start(emulation)
+            self.start(emulated_sensors=emulated_sensors)
         else:
-            self.emulation_mode = emulation
+            self.emulated_sensors = emulated_sensors
 
     def is_sensor_connected(self, sensor_id: SensorId) -> bool:
         """
@@ -88,7 +92,7 @@ class SensorManager:
         Handles ARC and emulation logic.
         """
         # Emulation mode: enabled in config = connected
-        if self.emulation_mode:
+        if sensor_id in self.emulated_sensors:
             
             return config_loader.is_sensor_enabled(sensor_id)
         
@@ -120,7 +124,7 @@ class SensorManager:
 
     async def _emulation_loop(self):
         start_time = time.time()
-        while self.running and self.emulation_mode:
+        while self.running and self.emulated_sensors:
             await self._emulate_data(start_time)
             await asyncio.sleep(0.1) # Rate limit
 
@@ -190,7 +194,7 @@ class SensorManager:
         from core.config_loader import config_loader
 
         # Emulate Force (Sine wave) only if enabled
-        if config_loader.is_sensor_enabled(SensorId.FORCE):
+        if SensorId.FORCE in self.emulated_sensors and config_loader.is_sensor_enabled(SensorId.FORCE):
             force_val = 500 + 500 * math.sin(elapsed) + random.uniform(-10, 10)
             line = f"ASC2 {int(elapsed * 1e6)} -39696 -3.577285e-02 {force_val:.6e} -0.000000e+00"
             if not self.queue.full():
@@ -206,7 +210,7 @@ class SensorManager:
         }
 
         for sensor_id, phase in phase_offsets.items():
-            if config_loader.is_sensor_enabled(sensor_id):
+            if sensor_id in self.emulated_sensors and config_loader.is_sensor_enabled(sensor_id):
                 disp_val = (((elapsed + phase) * 0.1) % 10 + random.uniform(-0.05, 0.05)) * {
                     SensorId.DISP_1: 1.00, SensorId.DISP_2: 1.10, SensorId.DISP_3: 0.90,
                     SensorId.DISP_4: 1.20, SensorId.DISP_5: 0.80

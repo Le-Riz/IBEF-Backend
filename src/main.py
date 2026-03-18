@@ -9,6 +9,7 @@ from routers.api import router as api_router
 from schemas import AppHealthOK
 from core.service_manager import service_manager
 from core.config_loader import config_loader
+from core.models.sensor_enum import SensorId
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +20,8 @@ class Settings(BaseSettings):
     # Allow emulation mode if no serial port is found
     # If False, the app will crash if no serial port is available
     # Can be overridden by environment variable or config file
-    emulation_mode: bool = os.getenv("EMULATION_MODE", "").lower() == "true" \
-        if os.getenv("EMULATION_MODE") else config_loader.get_emulation_mode()
-
+    emulation_mode: list[SensorId] = [SensorId[s.strip()] for s in os.getenv("EMULATION_MODE", "").split(",") if s.strip() in SensorId.__members__] \
+        if os.getenv("EMULATION_MODE") is not None else config_loader.get_emulation_mode()
 
 settings = Settings()
 
@@ -36,8 +36,8 @@ async def lifespan(app: FastAPI):
         await service_manager.start_services(emulation=settings.emulation_mode)
     except Exception as e:
         if settings.emulation_mode:
-            logger.error("Failed to start services: %s, falling back to emulation mode", e)
-            await service_manager.start_services(emulation=True)
+            logger.error("Failed to start services: %s, falling back to all sensors emulation mode", e)
+            await service_manager.start_services(emulation=list(SensorId))
         else:
             logger.error("Failed to start services and emulation mode is disabled: %s", e)
             raise

@@ -24,4 +24,4 @@ class calculatedConfigSensorData(defaultConfigSensorData):
 @dataclass
 class configData:
     sensors : Dict[SensorId, defaultConfigSensorData]
-    emulation : bool = True
+    emulation : list[SensorId] = field(default_factory=list)
