@@ -56,11 +56,11 @@ class TestManager:
         
         # File handles
         self.raw_file = None           # raw.log - raw serial input
-        self.csv_file = None           # data.csv - calibrated sensor data
-        self.csv_writer = None
         self.raw_csv_file = None       # raw_data.csv - uncalibrated sensor data
         self.raw_csv_writer = None
         self.current_test_dir = None
+        
+        self.max_interpolation_gap = 0.5 # seconds - max gap between points to allow interpolation, otherwise leave blank in CSV
         
         # PIL Images for graphiques (DISP_1 and ARC)
         self.graphique_disp1 = Graphique(SensorId.DISP_1, SensorId.FORCE, GraphiqueConfig())
@@ -192,11 +192,6 @@ class TestManager:
         # Open raw file
         self.raw_file = open(os.path.join(self.current_test_dir, "raw.log"), 'w', buffering=1) # Line buffered
         
-        # Open CSV file for calibrated data
-        self.csv_file = open(os.path.join(self.current_test_dir, "data.csv"), 'w', newline='')
-        # We don't know columns yet, will init on first frame or hardcode
-        self.csv_writer = None
-        
         # Open CSV file for raw data
         self.raw_csv_file = open(os.path.join(self.current_test_dir, "raw_data.csv"), 'w', newline='')
         self.raw_csv_writer = None
@@ -228,13 +223,9 @@ class TestManager:
         if self.raw_file:
             self.raw_file.close()
             self.raw_file = None
-        if self.csv_file:
-            self.csv_file.close()
-            self.csv_file = None
         if self.raw_csv_file:
             self.raw_csv_file.close()
             self.raw_csv_file = None
-            self.csv_writer = None
         
         # Save graphiques to test directory
         self.graphique_disp1.save_graphique(self.current_test_dir, "graphique_disp1.png")
@@ -243,6 +234,63 @@ class TestManager:
         # Mark as stopped but keep in memory
         self.is_running = False
         self.is_stopped = True
+
+    def calculate_interpolated_data(self):
+        
+        if self.current_test is None:
+            raise RuntimeError("No test in memory to calculate data for.")
+        
+        if self.current_test_dir is None:
+            raise RuntimeError("Test directory not initialized. This should not happen.")
+        
+        raw_csv = open(os.path.join(self.current_test_dir, "raw_data.csv"), 'r')
+        data_csv = open(os.path.join(self.current_test_dir, "data.csv"), 'w', newline='')
+        data_csv_writer = csv.DictWriter(data_csv, fieldnames=["timestamp", "relative_time"] + [sensor.name for sensor in SensorId])
+        raw_list: list[list[tuple[float, float]]] = [[] for _ in SensorId]
+        reader = csv.DictReader(raw_csv)
+        
+        for row in reader:
+            try:
+                sensor_id = SensorId[row["sensor_id"]]
+                timestamp = float(row["timestamp"])
+                raw_value = float(row["raw_value"])
+                raw_list[sensor_id.value].append((timestamp, raw_value))
+            except Exception as e:
+                logger.warning(f"Error parsing raw CSV row {row}: {e}")
+        
+        end_time = max(raw_list[sensor_id.value][-1][0] for sensor_id in SensorId if raw_list[sensor_id.value])
+        number_of_points = int(end_time - self.start_time * (1/PROCESSING_RATE))
+        
+        for i in range(0, number_of_points):
+            wantedTime = self.start_time + i * (1/PROCESSING_RATE)
+            line = {"timestamp": f"{wantedTime:.{self.time_decimals}f}", "relative_time": f"{wantedTime - self.start_time:.{self.time_decimals}f}"}
+            for sensor_id in SensorId:
+                data_points = raw_list[sensor_id.value]
+                if not data_points:
+                    continue
+                # Find two points that sandwich the wantedTime
+                before = None
+                after = None
+                for t, val in data_points:
+                    if not math.isnan(t) and t < wantedTime:
+                        before = (t, val)
+                    elif not math.isnan(t) and t > wantedTime and before is not None:
+                        after = (t, val)
+                        break
+                
+                if before is not None and after is not None and after[0] - before[0] <= self.max_interpolation_gap:
+                    t1, v1 = before
+                    t2, v2 = after
+                    interpolated_val = v1 + (v2 - v1) * (wantedTime - t1) / (t2 - t1)
+                    logger.debug(f"Interpolated {sensor_id.name} at {wantedTime:.3f}s: {interpolated_val:.3f}")
+                    line[sensor_id.name] = f"{interpolated_val:.{self.force_decimals if sensor_id == SensorId.FORCE else self.disp_decimals}f}"
+                else:
+                    line[sensor_id.name] = ""
+                    
+            data_csv_writer.writerow(line)
+        data_csv.flush()
+        raw_csv.close()
+        data_csv.close()
 
     def finalize_test(self):
         """Move stopped test to history and clear current test."""
@@ -260,6 +308,8 @@ class TestManager:
         
         # Clear data storage
         self.data_storage.clear_all()
+        
+        self.calculate_interpolated_data()
         
         self.current_test = None
         self.current_test_dir = None
@@ -376,34 +426,6 @@ class TestManager:
             
         if not math.isnan(datas[SensorId.ARC.value].value) and not math.isnan(datas[SensorId.FORCE.value].value):
             self.graphique_arc.plot_point_on_graphique(datas[SensorId.ARC.value].value, datas[SensorId.FORCE.value].value)
-        
-        # TODO: Remove writing CSV on update value and do it with interpolation when finalizing the test
-        # TODO: When interpolating if value is NaN take the next one until the gap between the two points exit a fixed value
-        #       (default 500ms) and put blank in csv when can't use value
-        # CSV Writing
-        if self.csv_file:
-            if self.csv_writer is None:
-                # Init header - convert SensorId enum keys to their names for CSV
-                headers = ["timestamp", "relative_time"] + sorted([sensor.name for sensor in SensorId])
-                self.csv_writer = csv.DictWriter(self.csv_file, fieldnames=headers)
-                self.csv_writer.writeheader()
-            
-            if not empty:
-                # Format timestamp and relative_time according to precision
-                row = {"timestamp": f"{t:.{self.time_decimals}f}", "relative_time": f"{rel_time:.{self.time_decimals}f}"}
-                # Convert enum keys to string names for CSV compatibility and format values
-                for sensor_id in SensorId:
-                    val = datas[sensor_id.value].value
-                    if val is None or math.isnan(val):
-                        row[sensor_id.name] = ""
-                    elif sensor_id == SensorId.FORCE:
-                        row[sensor_id.name] = f"{val:.{self.force_decimals}f}"
-                    elif sensor_id == SensorId.DISP_1 or sensor_id == SensorId.DISP_2 or sensor_id == SensorId.DISP_3 or sensor_id == SensorId.DISP_4 or sensor_id == SensorId.DISP_5 or sensor_id == SensorId.ARC:
-                        row[sensor_id.name] = f"{val:.{self.disp_decimals}f}"
-                    else:
-                        row[sensor_id.name] = f"{val:.{self.force_decimals}f}"
-                self.csv_writer.writerow(row)
-                self.csv_file.flush()
 
         for sensor_data in datas:
             self._store_sensor_data(sensor_data)
