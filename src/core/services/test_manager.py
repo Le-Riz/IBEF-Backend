@@ -251,7 +251,9 @@ class TestManager:
         
         for row in reader:
             try:
-                sensor_id = SensorId[row["sensor_id"]]
+                # Handle legacy 'SensorId.FORCE' or standard 'FORCE' string
+                sensor_id_str = row["sensor_id"].split('.')[-1]
+                sensor_id = SensorId[sensor_id_str]
                 timestamp = float(row["timestamp"])
                 raw_value = float(row["raw_value"])
                 offset = float(row["offset"])
@@ -259,8 +261,14 @@ class TestManager:
             except Exception as e:
                 logger.warning(f"Error parsing raw CSV row {row}: {e}")
         
-        end_time = max(raw_list[sensor_id.value][-1][0] for sensor_id in SensorId if raw_list[sensor_id.value])
-        number_of_points = int(end_time - self.start_time * (1/PROCESSING_RATE))
+        valid_end_times = [raw_list[sensor_id.value][-1][0] for sensor_id in SensorId if raw_list[sensor_id.value]]
+        if not valid_end_times:
+            data_csv.close()
+            raw_csv.close()
+            return
+            
+        end_time = max(valid_end_times)
+        number_of_points = int((end_time - self.start_time) * PROCESSING_RATE)
         
         for i in range(0, number_of_points):
             wantedTime = self.start_time + i * (1/PROCESSING_RATE)
@@ -401,7 +409,7 @@ class TestManager:
         row = {
             "timestamp": f"{t:.{self.time_decimals}f}",
             "relative_time": f"{rel_time:.{self.time_decimals}f}",
-            "sensor_id": sensor_id,
+            "sensor_id": sensor_id.name,
             "raw_value": _format_raw_value(sensor_id, value),
             "offset": _format_raw_value(sensor_id, sensor_data.offset)
         }

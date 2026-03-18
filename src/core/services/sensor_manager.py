@@ -1,10 +1,11 @@
 import os
-import queue
+
 import threading
 import time
 import logging
 import math
 import random
+import asyncio
 from typing import Callable, Dict, Optional
 
 from core.config_loader import config_loader
@@ -25,10 +26,10 @@ class SensorManager:
         self.running = False
         self.emulation_mode = False
         self.sensors: list[SensorData] = [SensorData(0.0, id, math.nan, math.nan) for id in SensorId]
-        self._thread: Optional[threading.Thread] = None
+        self._emulation_task: Optional[asyncio.Task] = None
         self.offsets: list[float] = [0.0 for _ in SensorId]
         self._serial_handlers: list[SerialHandler] = []
-        self.queue: queue.Queue[tuple[SensorId, str, float]] = queue.Queue(maxsize=1024)
+        self.queue: asyncio.Queue[tuple[SensorId, str, float]] = asyncio.Queue(maxsize=1024)
         self._sensors_task: SensorsTask = SensorsTask(self.queue)
         self.notify_funcs: list[Callable[[SensorData], None]] = []
         self.want_zero: bool = False
@@ -37,6 +38,8 @@ class SensorManager:
         self.arc_sensor_dependencies: list[SensorId] = []
         if isinstance(arc_config, calculatedConfigSensorData):
             self.arc_sensor_dependencies: list[SensorId] = [dep.id for dep in arc_config.dependencies]
+        
+        self.add_write_func(self._on_serial_data)
 
     def start(self, emulation=False, sensor_ports: Optional[Dict[SensorId, tuple[str, int]]] = None):
         """Start sensor data acquisition. If not in emulation, expects sensor_ports: Dict[SensorId, (port, baud)]"""
@@ -51,8 +54,8 @@ class SensorManager:
         logger.info(f"SensorManager started (Emulation: {emulation})")
 
         if self.emulation_mode:
-            self._thread = threading.Thread(target=self._loop, daemon=True)
-            self._thread.start()
+            self._emulation_task = asyncio.create_task(self._emulation_loop())
+            self._sensors_task.start()
         else:
             # Launch a SensorTask for each real sensor
             if sensor_ports is None:
@@ -96,14 +99,18 @@ class SensorManager:
                     return False
             return True
         
-        return os.path.exists(self.sensor_ports[sensor_id.value])
+        port = self.sensor_ports[sensor_id.value]
+        if not port:
+            return False
+            
+        return os.path.exists(PORT_PREFIX + port)
     
     def stop(self):
         """Stop sensor data acquisition."""
         self.running = False
-        if self._thread:
-            self._thread.join()
-            self._thread = None
+        if self._emulation_task:
+            self._emulation_task.cancel()
+            self._emulation_task = None
         # Stop all serial handlers
         for handler in self._serial_handlers:
             handler.stop()
@@ -111,29 +118,26 @@ class SensorManager:
         self._sensors_task.stop()
         logger.info("SensorManager stopped")
 
-    def _loop(self):
+    async def _emulation_loop(self):
         start_time = time.time()
-        while self.running:
-            if self.emulation_mode:
-                self._emulate_data(start_time)
-            time.sleep(0.1) # Rate limit
+        while self.running and self.emulation_mode:
+            await self._emulate_data(start_time)
+            await asyncio.sleep(0.1) # Rate limit
 
-    def _on_serial_data(self, sensorId: SensorId, time: float, line: str):
-        # Only process if NOT in emulation mode
-        if not self.emulation_mode:
-            try:
-                if sensorId == SensorId.FORCE:
-                    self._parse_force(sensorId, time, line)
-                    
-                elif (sensorId == SensorId.DISP_1 or
-                      sensorId == SensorId.DISP_2 or
-                      sensorId == SensorId.DISP_3 or
-                      sensorId == SensorId.DISP_4 or
-                      sensorId == SensorId.DISP_5):
-                    self._parse_motion(sensorId, time, line)
-                    
-            except Exception as e:
-                logger.warning(f"Error parsing line: {line} -> {e}")
+    def _on_serial_data(self, sensorId: SensorId, time_val: float, line: str):
+        try:
+            if sensorId == SensorId.FORCE:
+                self._parse_force(sensorId, time_val, line)
+                
+            elif (sensorId == SensorId.DISP_1 or
+                  sensorId == SensorId.DISP_2 or
+                  sensorId == SensorId.DISP_3 or
+                  sensorId == SensorId.DISP_4 or
+                  sensorId == SensorId.DISP_5):
+                self._parse_motion(sensorId, time_val, line)
+                
+        except Exception as e:
+            logger.warning(f"Error parsing line: {line} -> {e}")
 
     def set_zero(self, sensor_id: SensorId):
         """Manually zero a sensor by updating its offset."""
@@ -180,7 +184,7 @@ class SensorManager:
                 return self.sensors[SensorId.ARC.value]
         return None
 
-    def _emulate_data(self, start_time):
+    async def _emulate_data(self, start_time):
         elapsed = time.time() - start_time
 
         from core.config_loader import config_loader
@@ -188,7 +192,9 @@ class SensorManager:
         # Emulate Force (Sine wave) only if enabled
         if config_loader.is_sensor_enabled(SensorId.FORCE):
             force_val = 500 + 500 * math.sin(elapsed) + random.uniform(-10, 10)
-            self._notify(SensorId.FORCE, time.time(), force_val)
+            line = f"ASC2 {int(elapsed * 1e6)} -39696 -3.577285e-02 {force_val:.6e} -0.000000e+00"
+            if not self.queue.full():
+                await self.queue.put((SensorId.FORCE, line, time.time()))
 
         # Emulate Displacement (Linear + Noise) with per-sensor phase offsets to avoid overlap
         phase_offsets = {
@@ -201,16 +207,14 @@ class SensorManager:
 
         for sensor_id, phase in phase_offsets.items():
             if config_loader.is_sensor_enabled(sensor_id):
-                disp_val = ((elapsed + phase) * 0.1) % 10 + random.uniform(-0.05, 0.05)
-                # Slight scale differences per sensor for diversity
-                scale = {
-                    SensorId.DISP_1: 1.00,
-                    SensorId.DISP_2: 1.10,
-                    SensorId.DISP_3: 0.90,
-                    SensorId.DISP_4: 1.20,
-                    SensorId.DISP_5: 0.80,
+                disp_val = (((elapsed + phase) * 0.1) % 10 + random.uniform(-0.05, 0.05)) * {
+                    SensorId.DISP_1: 1.00, SensorId.DISP_2: 1.10, SensorId.DISP_3: 0.90,
+                    SensorId.DISP_4: 1.20, SensorId.DISP_5: 0.80
                 }[sensor_id]
-                self._notify(sensor_id, time.time(), disp_val * scale)
+                
+                line = f"1 087 665 us SPC_VAL usSenderId=0x2E01 ulMicros={int(elapsed * 1e6)} Val={disp_val:.3f}"
+                if not self.queue.full():
+                    await self.queue.put((sensor_id, line, time.time()))
 
     def _notify(self, sensor_id: SensorId, time: float, value: float):
         if self.want_zero:
