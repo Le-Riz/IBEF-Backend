@@ -79,6 +79,8 @@ class TestManager:
         os.makedirs(TEST_DATA_DIR, exist_ok=True)
         os.makedirs(ARCHIVE_DIR, exist_ok=True)
 
+        self.files_added_to_current_test: list[str] = []
+
         # Emulation clock (used when no test is running)
         self.emulation_start_time: float | None = None
 
@@ -327,6 +329,8 @@ class TestManager:
         # Reset emulation clock to allow live time in simulation mode
         self.emulation_start_time = None
         
+        self.files_added_to_current_test.clear()
+        
         # Reload history now that the test is finalized and cleared from memory
         self.reload_history()
 
@@ -518,6 +522,41 @@ class TestManager:
             return True
         
         return False
+    
+    def add_file(self, file: bytes, filename: str) -> bool:
+        """Add a file to the current test directory."""
+        if self.current_test_dir is None:
+            return False
+        
+        self.files_added_to_current_test.append(filename)
+        file_path = os.path.join(self.current_test_dir, filename)
+        with open(file_path, 'wb') as f:
+            f.write(file)
+        logger.info(f"Added file {filename} to test {self.current_test.test_id}")  # type: ignore
+        return True
+    
+    def list_files(self) -> List[str]:
+        """List files added to the current test (excluding raw.log and description.md)."""
+        if self.current_test_dir is None:
+            return []
+        
+        # Return the list of files added via add_file, excluding raw.log and description.md
+        return self.files_added_to_current_test
+    
+    def get_file(self, filename: str) -> Optional[bytes]:
+        """Get the content of a file added to the current test."""
+        if self.current_test_dir is None:
+            return None
+        
+        if filename not in self.files_added_to_current_test:
+            return None
+        
+        file_path = os.path.join(self.current_test_dir, filename)
+        if os.path.exists(file_path):
+            with open(file_path, 'rb') as f:
+                return f.read()
+        
+        return None
 
 # Global instance
 test_manager = TestManager()

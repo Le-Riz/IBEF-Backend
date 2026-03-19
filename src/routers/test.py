@@ -199,6 +199,112 @@ async def update_current_test_description(payload: dict) -> None:
         raise HTTPException(status_code=500, detail="Failed to update description")
 
 
+@router.get("/files", responses={
+    409: {
+        "description": "No test prepared. Call POST /info first.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "No test prepared. Call POST /info first."}
+            }
+        }
+    }
+})
+async def list_current_test_files() -> dict:
+    """
+    List the files that have been added to the current test.
+    
+    Returns a list of filenames that have been uploaded via POST /files for the current test.
+    Available after POST /info has been called.
+    """
+    if test_manager.current_test is None:
+        raise HTTPException(status_code=409, detail="No test prepared. Call POST /info first.")
+    
+    files = test_manager.list_files()
+    return {"files": files}
+
+@router.post("/files", status_code=204, responses={
+    409: {
+        "description": "No test prepared. Call POST /info first.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "No test prepared. Call POST /info first."}
+            }
+        }    },
+    500: {
+        "description": "Failed to add file to test.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Failed to add file to test: No test directory available."}
+            }
+        }
+    }
+})
+async def add_file_to_current_test(file: bytes, filename: str) -> None:
+    """
+    Add a file to the current test.
+    
+    The file is saved in the current test directory and will be part of the test record.
+    Available after POST /info has been called.
+    
+    Request body:
+    ```json
+    {
+        "file": "<base64-encoded file content>",
+        "filename": "example.txt"
+    }
+    ```
+    """
+    if test_manager.current_test is None:
+        raise HTTPException(status_code=409, detail="No test prepared. Call POST /info first.")
+    
+    success = test_manager.add_file(file, filename)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to add file to test: No test directory available.")
+
+@router.get("/files/{filename}", responses={
+    409: {
+        "description": "No test prepared. Call POST /info first.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "No test prepared. Call POST /info first."}
+            }
+        }
+    },
+    404: {
+        "description": "File not found in current test.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "File example.txt not found in current test."}
+            }
+        }
+    }
+})
+async def get_file_from_current_test(filename: str) -> bytes:
+    """
+    Retrieve a file from the current test.
+    
+    Returns the content of the specified file that was added to the current test.
+    Available after POST /info has been called.
+    
+    Response body:
+    ```json
+    {
+        "file": "<base64-encoded file content>"
+    }
+    ```
+    """
+    if test_manager.current_test is None:
+        raise HTTPException(status_code=409, detail="No test prepared. Call POST /info first.")
+    
+    try:
+        file_content = test_manager.get_file(filename)
+        if file_content is None:
+            raise HTTPException(status_code=404, detail=f"File {filename} not found in current test.")
+        
+        return file_content
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"File {filename} not found in current test.")
+
 @router.put("/finalize", status_code=204, responses={
     400: {
         "description": "No test in STOPPED state to finalize.",
