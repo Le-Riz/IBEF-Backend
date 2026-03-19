@@ -267,6 +267,38 @@ async def add_file_to_current_test(file: bytes, filename: str) -> None:
     if not success:
         raise HTTPException(status_code=500, detail="Failed to add file to test: No test directory available.")
 
+@router.delete("/files/{filename}", status_code=204, responses={
+    409: {
+        "description": "No test prepared. Call POST /info first.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "No test prepared. Call POST /info first."}
+            }
+        }
+    },
+    404: {
+        "description": "File not found in current test.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "File example.txt not found in current test."}
+            }
+        }
+    }
+})
+async def delete_file_from_current_test(filename: str) -> None:
+    """
+    Delete a file from the current test.
+
+    Removes the specified file from the test directory and the tracked file list.
+    Available after POST /info has been called.
+    """
+    if test_manager.current_test is None:
+        raise HTTPException(status_code=409, detail="No test prepared. Call POST /info first.")
+
+    success = test_manager.delete_file(filename)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"File {filename} not found in current test.")
+
 @router.get("/files/{filename}", responses={
     409: {
         "description": "No test prepared. Call POST /info first.",

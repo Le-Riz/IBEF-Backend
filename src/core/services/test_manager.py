@@ -542,6 +542,22 @@ class TestManager:
         # Return the list of files added via add_file, excluding raw.log and description.md
         return self.files_added_to_current_test
     
+    def delete_file(self, filename: str) -> bool:
+        """Delete a file that was added to the current test."""
+        if self.current_test_dir is None:
+            return False
+
+        if filename not in self.files_added_to_current_test:
+            return False
+
+        file_path = os.path.join(self.current_test_dir, filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        self.files_added_to_current_test.remove(filename)
+        logger.info(f"Deleted file {filename} from test {self.current_test.test_id}")  # type: ignore
+        return True
+
     def get_file(self, filename: str) -> Optional[bytes]:
         """Get the content of a file added to the current test."""
         if self.current_test_dir is None:
