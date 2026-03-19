@@ -193,9 +193,7 @@ class SensorManager:
         
         if not math.isnan(sending_timestamp) and not math.isnan(request_timestamp):
             time = time - (sending_timestamp - request_timestamp)
-            logger.warning(f"Sending_timestamp={sending_timestamp:.6f}, request_timestamp={request_timestamp:.6f}, new time={time:.6f}")
         else:
-            logger.warning(f"str Sending TimeStamp={sending_timestamp_str:.6f}, Sending_timestamp={sending_timestamp:.6f}, request_timestamp={request_timestamp:.6f}")
             time = math.nan
         
         if sender_id and val is not None:
