@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from typing import Any
+import base64
 from dataclasses import asdict
 from core.models.test_data import TestMetaData
 from core.models.test_state import TestState
@@ -257,7 +258,12 @@ async def add_file_to_current_test(file: bytes, filename: str) -> None:
     if test_manager.current_test is None:
         raise HTTPException(status_code=409, detail="No test prepared. Call POST /info first.")
     
-    success = test_manager.add_file(file, filename)
+    try:
+        decoded_file = base64.b64decode(file)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid base64 encoded file content: {e}")
+        
+    success = test_manager.add_file(decoded_file, filename)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to add file to test: No test directory available.")
 
@@ -301,7 +307,7 @@ async def get_file_from_current_test(filename: str) -> bytes:
         if file_content is None:
             raise HTTPException(status_code=404, detail=f"File {filename} not found in current test.")
         
-        return file_content
+        return base64.b64encode(file_content)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"File {filename} not found in current test.")
 
