@@ -32,7 +32,7 @@ class SensorManager:
         self.queue: asyncio.Queue[tuple[SensorId, str, float]] = asyncio.Queue(maxsize=1024)
         self._sensors_task: SensorsTask = SensorsTask(self.queue)
         self.notify_funcs: list[Callable[[SensorData], None]] = []
-        self.want_zero: bool = False
+        self.zero_requests: dict[SensorId, int] = {}
         self.sensor_ports: list[str] = [""] * len(SensorId)
         arc_config = config_loader.get_sensor_config(SensorId.ARC)
         self.arc_sensor_dependencies: list[SensorId] = []
@@ -146,7 +146,7 @@ class SensorManager:
     def set_zero(self, sensor_id: SensorId):
         """Manually zero a sensor by updating its offset."""
         if sensor_id in SensorId:
-            self.want_zero = True
+            self.zero_requests[sensor_id] = 3
 
     def _parse_force(self, sensorId: SensorId, time: float, line: str):
         # ASC2 20945595 -165341 -1.527986e-01 -4.965955e+01 -0.000000e+00
@@ -221,11 +221,15 @@ class SensorManager:
                     await self.queue.put((sensor_id, line, time.time()))
 
     def _notify(self, sensor_id: SensorId, time: float, value: float):
-        if self.want_zero:
+        if self.zero_requests.get(sensor_id, 0) > 0:
             if not math.isnan(value):
                 self.offsets[sensor_id.value] = value
-                self.want_zero = False
+                self.zero_requests[sensor_id] = 0
                 logger.info(f"Zeroed sensor {sensor_id}. New offset: {self.offsets[sensor_id.value]}")
+            else:
+                self.zero_requests[sensor_id] -= 1
+                if self.zero_requests[sensor_id] == 0:
+                    logger.warning(f"Failed to zero sensor {sensor_id} after 3 attempts with NaN values.")
         
         # Apply offset
         offset = self.offsets[sensor_id.value]
