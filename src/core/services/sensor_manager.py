@@ -29,7 +29,7 @@ class SensorManager:
         self._emulation_task: Optional[asyncio.Task] = None
         self.offsets: list[float] = [0.0 for _ in SensorId]
         self._serial_handlers: list[SerialHandler] = []
-        self.queue: asyncio.Queue[tuple[SensorId, str, float]] = asyncio.Queue(maxsize=1024)
+        self.queue: asyncio.Queue[tuple[SensorId, str, float]] = asyncio.Queue(maxsize=8192)
         self._sensors_task: SensorsTask = SensorsTask(self.queue)
         self.notify_funcs: list[Callable[[SensorData], None]] = []
         self.zero_requests: dict[SensorId, int] = {}
