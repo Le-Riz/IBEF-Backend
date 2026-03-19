@@ -58,4 +58,10 @@ class SerialHandler:
                     
             except Exception as e:
                 logger.error(f"Error reading from serial port for {self.sensor_id}: {e}")
+                if self.serial:
+                    try:
+                        self.serial.close()
+                    except Exception as close_error:
+                        logger.error(f"Error closing serial port for {self.sensor_id}: {close_error}")
+                    self.serial = None
                 await asyncio.sleep(1.0)
