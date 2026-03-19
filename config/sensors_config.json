@@ -1,7 +1,5 @@
 {
-  "emulation": [
-    "FORCE"
-  ],
+  "emulation": [],
   "sensors": {
     "FORCE": {
       "baud": 115200,
