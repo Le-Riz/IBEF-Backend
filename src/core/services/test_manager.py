@@ -418,7 +418,6 @@ class TestManager:
             "offset": _format_raw_value(sensor_id, sensor_data.offset)
         }
         self.raw_csv_writer.writerow(row)
-        self.raw_csv_file.flush()
 
     def _store_sensor_data(self, data: SensorData, epsilon: float = 1e-6):
         """Store data in circular buffers
