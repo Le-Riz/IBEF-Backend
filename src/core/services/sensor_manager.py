@@ -163,14 +163,39 @@ class SensorManager:
         parts = line.split()
         sender_id = None
         val = None
+        sending_timestamp_str = ""
+        sending_timestamp = math.nan
+        us_seen = False
+        requsest_timestamp = math.nan
         for part in parts:
-            if part.startswith("usSenderId="):
+            if not us_seen:
+                if part.endswith("us"):
+                    sending_timestamp_str += part[:-2]
+                    try:
+                        sending_timestamp = float(sending_timestamp_str) / 1e6
+                    except ValueError:
+                        pass
+                    us_seen = True
+                else:
+                    sending_timestamp_str += part
+            elif part.startswith("usSenderId="):
                 sender_id = part.split("=")[1]
             elif part.startswith("Val="):
                 try:
                     val = float(part.split("=")[1])
                 except ValueError:
                     pass
+            elif part.startswith("ulMicros="):
+                try:
+                    requsest_timestamp = float(part.split("=")[1]) / 1e6
+                except ValueError:
+                    pass
+        
+        if not math.isnan(sending_timestamp) and not math.isnan(requsest_timestamp):
+            time = time - (requsest_timestamp - sending_timestamp)
+            logger.info(f"Sending_timestamp={sending_timestamp:.6f}, request_timestamp={requsest_timestamp:.6f}, new time={time:.6f}")
+        else:
+            time = math.nan
         
         if sender_id and val is not None:
             self._notify(sensorId, time, val)
