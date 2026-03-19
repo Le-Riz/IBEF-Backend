@@ -239,7 +239,8 @@ class SensorManager:
                     SensorId.DISP_4: 1.20, SensorId.DISP_5: 0.80
                 }[sensor_id]
                 
-                line = f"1 087 665 us SPC_VAL usSenderId=0x2E01 ulMicros={int(elapsed * 1e6)} Val={disp_val:.3f}"
+                elapsed_us = int(elapsed * 1e6)
+                line = f"{elapsed_us} us SPC_VAL usSenderId=0x2E01 ulMicros={elapsed_us} Val={disp_val:.3f}"
                 if not self.queue.full():
                     await self.queue.put((sensor_id, line, time.time()))
 
