@@ -166,7 +166,7 @@ class SensorManager:
         sending_timestamp_str = ""
         sending_timestamp = math.nan
         us_seen = False
-        requsest_timestamp = math.nan
+        request_timestamp = math.nan
         for part in parts:
             if not us_seen:
                 if part.endswith("us"):
@@ -180,21 +180,22 @@ class SensorManager:
                     sending_timestamp_str += part
             elif part.startswith("usSenderId="):
                 sender_id = part.split("=")[1]
+            elif part.startswith("ulMicros="):
+                try:
+                    request_timestamp = float(part.split("=")[1]) / 1e6
+                except ValueError:
+                    pass
             elif part.startswith("Val="):
                 try:
                     val = float(part.split("=")[1])
                 except ValueError:
                     pass
-            elif part.startswith("ulMicros="):
-                try:
-                    requsest_timestamp = float(part.split("=")[1]) / 1e6
-                except ValueError:
-                    pass
         
-        if not math.isnan(sending_timestamp) and not math.isnan(requsest_timestamp):
-            time = time - (requsest_timestamp - sending_timestamp)
-            logger.info(f"Sending_timestamp={sending_timestamp:.6f}, request_timestamp={requsest_timestamp:.6f}, new time={time:.6f}")
+        if not math.isnan(sending_timestamp) and not math.isnan(request_timestamp):
+            time = time - (request_timestamp - sending_timestamp)
+            logger.warning(f"Sending_timestamp={sending_timestamp:.6f}, request_timestamp={request_timestamp:.6f}, new time={time:.6f}")
         else:
+            logger.warning(f"str Sending TimeStamp={sending_timestamp_str:.6f}, Sending_timestamp={sending_timestamp:.6f}, request_timestamp={request_timestamp:.6f}")
             time = math.nan
         
         if sender_id and val is not None:
