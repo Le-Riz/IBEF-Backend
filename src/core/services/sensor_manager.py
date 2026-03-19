@@ -70,8 +70,7 @@ class SensorManager:
                     continue
                 self.sensor_ports[sensor_id.value] = port
                 full_port = PORT_PREFIX + port
-                serial_handler = SerialHandler(sensor_id=sensor_id, port=full_port, queue=self.queue, 
-                                               baudrate=baud, serial_timeout=0.5)
+                serial_handler = SerialHandler(sensor_id=sensor_id, port=full_port, queue=self.queue, baudrate=baud, serial_timeout=0.01)
                 
                 serial_handler.start()
                 self._serial_handlers.append(serial_handler)
