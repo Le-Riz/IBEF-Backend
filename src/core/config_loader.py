@@ -16,7 +16,7 @@ class ConfigLoader:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(ConfigLoader, cls).__new__(cls)
-            cls._instance._config = configData(sensors={}, emulation=True)
+            cls._instance._config = configData(sensors={}, emulation=[])
             cls._instance._initialized = False
         return cls._instance
     
@@ -81,7 +81,7 @@ class ConfigLoader:
                             logger.warning(f"Dependency sensor {dep_key} for {sensor_key} not found in config.")
                     self._config.sensors[sensor_id] = calculated_sensor
                 
-                self._config.emulation = json_data.get("emulation", True)
+                self._config.emulation = [SensorId[s] for s in json_data.get("emulation", []) if s in SensorId.__members__]
             logger.info(f"Configuration loaded from {config_path}")
             
         except json.JSONDecodeError as e:
@@ -97,7 +97,7 @@ class ConfigLoader:
         """Return default configuration."""
         
         return configData(
-            emulation=True,
+            emulation=[],
             sensors={
                 SensorId.FORCE: configSensorData(SensorId.FORCE, baud=115200, description="", displayName="", serialId="", max=0.0, enabled=True),
                 SensorId.DISP_1: configSensorData(SensorId.DISP_1, baud=9600, description="", displayName="", serialId="", max=0.0, enabled=True),
@@ -109,7 +109,7 @@ class ConfigLoader:
             }
         )
     
-    def get_emulation_mode(self) -> bool:
+    def get_emulation_mode(self) -> list[SensorId]:
         """Get the emulation mode setting."""
         return self._config.emulation
     

@@ -17,11 +17,9 @@ from core.models.test_data import TestMetaData
 from core.models.test_state import TestState
 from core.models.sensor_enum import SensorId
 from core.models.circular_buffer import SensorDataStorage
-from core.processing.data_processor import PROCESSING_RATE
 from core.config_loader import config_loader
 from core.processing.graphique import Graphique, GraphiqueConfig
 from core.services.sensor_manager import sensor_manager
-from core.processing.data_processor import data_processor
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +34,7 @@ ARCHIVE_DIR = os.path.join(STORAGE_ROOT, "archived_data")
 # Default: 20 Hz (50ms between points)
 SENSOR_SAMPLING_FREQ = 5.0
 
+PROCESSING_RATE = 4.0
 
 class TestManager:
     def __init__(self):
@@ -49,8 +48,7 @@ class TestManager:
         # Point spacing is determined by DataProcessor publishing rate (PROCESSING_RATE),
         # not raw sensor frequency. If raw > processing rate, effective freq = processing rate.
         # Align buffer sampling with the processor publish rate to avoid underestimating window span
-        effective_freq = PROCESSING_RATE
-        self.data_storage = SensorDataStorage(len(list(SensorId)), min(effective_freq,SENSOR_SAMPLING_FREQ))
+        self.data_storage = SensorDataStorage(len(list(SensorId)), SENSOR_SAMPLING_FREQ)
         
         self.start_time = 0.0
         
@@ -65,6 +63,9 @@ class TestManager:
         # PIL Images for graphiques (DISP_1 and ARC)
         self.graphique_disp1 = Graphique(SensorId.DISP_1, SensorId.FORCE, GraphiqueConfig())
         self.graphique_arc = Graphique(SensorId.ARC, SensorId.FORCE, GraphiqueConfig(x_min=-5.0))
+
+        self.graphique_disp1_history: tuple[SensorData, SensorData] = (SensorData(0.0, SensorId.DISP_1, math.nan), SensorData(0.0, SensorId.FORCE, math.nan))
+        self.graphique_arc_history: tuple[SensorData, SensorData] = (SensorData(0.0, SensorId.ARC, math.nan), SensorData(0.0, SensorId.FORCE, math.nan))
 
         # Numeric output precision (decimals after the decimal point)
         # time: number of decimals for relative_time (seconds)
@@ -85,9 +86,8 @@ class TestManager:
         self.reload_history()
 
         # Add write functions to receive data from SensorManager and processed data from DataProcessor
-        sensor_manager.add_write_funcs(self._on_serial_data)
+        sensor_manager.add_write_func(self._on_serial_data)
         
-        data_processor.set_processing_function(self._on_processed_data)
         sensor_manager.add_func_notify(self._on_raw_sensor_data)
 
     def reload_history(self):
@@ -251,15 +251,24 @@ class TestManager:
         
         for row in reader:
             try:
-                sensor_id = SensorId[row["sensor_id"]]
+                # Handle legacy 'SensorId.FORCE' or standard 'FORCE' string
+                sensor_id_str = row["sensor_id"].split('.')[-1]
+                sensor_id = SensorId[sensor_id_str]
                 timestamp = float(row["timestamp"])
                 raw_value = float(row["raw_value"])
-                raw_list[sensor_id.value].append((timestamp, raw_value))
+                offset = float(row["offset"])
+                raw_list[sensor_id.value].append((timestamp, raw_value - offset))
             except Exception as e:
                 logger.warning(f"Error parsing raw CSV row {row}: {e}")
         
-        end_time = max(raw_list[sensor_id.value][-1][0] for sensor_id in SensorId if raw_list[sensor_id.value])
-        number_of_points = int(end_time - self.start_time * (1/PROCESSING_RATE))
+        valid_end_times = [raw_list[sensor_id.value][-1][0] for sensor_id in SensorId if raw_list[sensor_id.value]]
+        if not valid_end_times:
+            data_csv.close()
+            raw_csv.close()
+            return
+            
+        end_time = max(valid_end_times)
+        number_of_points = int((end_time - self.start_time) * PROCESSING_RATE)
         
         for i in range(0, number_of_points):
             wantedTime = self.start_time + i * (1/PROCESSING_RATE)
@@ -356,9 +365,32 @@ class TestManager:
         sensor_id = sensor_data.sensor_id
         value = sensor_data.value
         
+        if sensor_id == SensorId.DISP_1:
+            self.graphique_disp1_history = (sensor_data, self.graphique_disp1_history[1])
+            
+            if not math.isnan(self.graphique_disp1_history[0].value) and not math.isnan(self.graphique_disp1_history[1].value):
+                self.graphique_disp1.plot_point_on_graphique(self.graphique_disp1_history[0].value, self.graphique_disp1_history[1].value)
+        
+        elif sensor_id == SensorId.ARC:
+            self.graphique_arc_history = (sensor_data, self.graphique_arc_history[1])
+            
+            if not math.isnan(self.graphique_arc_history[0].value) and not math.isnan(self.graphique_arc_history[1].value):
+                self.graphique_arc.plot_point_on_graphique(self.graphique_arc_history[0].value, self.graphique_arc_history[1].value)
+        
+        elif sensor_id == SensorId.FORCE:
+            self.graphique_disp1_history = (self.graphique_disp1_history[0], sensor_data)
+            if not math.isnan(self.graphique_disp1_history[0].value) and not math.isnan(self.graphique_disp1_history[1].value):
+                self.graphique_disp1.plot_point_on_graphique(self.graphique_disp1_history[0].value, self.graphique_disp1_history[1].value)
+                
+            self.graphique_arc_history = (self.graphique_arc_history[0], sensor_data)
+            if not math.isnan(self.graphique_arc_history[0].value) and not math.isnan(self.graphique_arc_history[1].value):
+                self.graphique_arc.plot_point_on_graphique(self.graphique_arc_history[0].value, self.graphique_arc_history[1].value)
+        
+        self._store_sensor_data(sensor_data)
+        
         # Initialize CSV writer on first raw data
         if self.raw_csv_writer is None:
-            headers = ["timestamp", "relative_time", "sensor_id", "raw_value"]
+            headers = ["timestamp", "relative_time", "sensor_id", "raw_value", "offset"]
             self.raw_csv_writer = csv.DictWriter(self.raw_csv_file, fieldnames=headers)
             self.raw_csv_writer.writeheader()
         
@@ -377,8 +409,9 @@ class TestManager:
         row = {
             "timestamp": f"{t:.{self.time_decimals}f}",
             "relative_time": f"{rel_time:.{self.time_decimals}f}",
-            "sensor_id": sensor_id,
-            "raw_value": _format_raw_value(sensor_id, value)
+            "sensor_id": sensor_id.name,
+            "raw_value": _format_raw_value(sensor_id, value),
+            "offset": _format_raw_value(sensor_id, sensor_data.offset)
         }
         self.raw_csv_writer.writerow(row)
         self.raw_csv_file.flush()
@@ -405,30 +438,6 @@ class TestManager:
                 expected_time = last_time + spacing
                 if rel_time + epsilon >= expected_time:
                     self.data_storage.append(sensor_idx, rel_time, val)
-
-    def _on_processed_data(self, datas: list[SensorData]):
-        """Handle processed (calibrated) sensor data from DataProcessor."""
-        if not self.is_running:
-            return
-
-        t = datas[0].timestamp if datas and datas[0].timestamp > 0.0 else time.time()
-        rel_time = t - self.start_time
-        empty = True
-        
-        for data in datas:
-            if not math.isnan(data.value):
-                empty = False
-                break
-        
-        # Plot points on both graphiques
-        if not math.isnan(datas[SensorId.DISP_1.value].value) and not math.isnan(datas[SensorId.FORCE.value].value):
-            self.graphique_disp1.plot_point_on_graphique(datas[SensorId.DISP_1.value].value, datas[SensorId.FORCE.value].value)
-            
-        if not math.isnan(datas[SensorId.ARC.value].value) and not math.isnan(datas[SensorId.FORCE.value].value):
-            self.graphique_arc.plot_point_on_graphique(datas[SensorId.ARC.value].value, datas[SensorId.FORCE.value].value)
-
-        for sensor_data in datas:
-            self._store_sensor_data(sensor_data)
                 
     def get_sensor_history(self, sensor_id: SensorId, window_seconds: int):
         """Return recent data for a sensor over the requested window (seconds)."""
@@ -455,7 +464,7 @@ class TestManager:
         except Exception:
             sensor_manager = None
 
-        if sensor_manager and sensor_manager.emulation_mode:
+        if sensor_manager and sensor_manager.emulated_sensors:
             if self.emulation_start_time is None:
                 self.emulation_start_time = time.time()
             return time.time() - self.emulation_start_time

@@ -23,13 +23,10 @@ async def get_sensors_all() -> DictPoint:
         points.data[sensor.name] = Point(time=test_manager.get_relative_time(), value=0)
         points.zeros[sensor.name] = OffsetResponse(offset=0)
         if sensor_manager.is_sensor_connected(sensor):
-            idx = sensor.value
-            corrected = sensor_manager.sensors[idx]
-            offset = sensor_manager.offsets[idx]
-            raw_value = corrected + offset
-            points.raw[sensor.name].value = raw_value
-            points.data[sensor.name].value = corrected
-            points.zeros[sensor.name].offset = sensor_manager.offsets[sensor.value]
+            value = sensor_manager.sensors[sensor.value]
+            points.raw[sensor.name].value = value.raw_value
+            points.data[sensor.name].value = value.value
+            points.zeros[sensor.name].offset = value.offset
         else:
             points.raw[sensor.name].value = math.nan
             points.data[sensor.name].value = math.nan
@@ -78,8 +75,7 @@ async def get_sensor_data(sensor_id: str) -> Point:
 
     idx = sid.value
     corrected = sensor_manager.sensors[idx]
-    relative_time = test_manager.get_relative_time()
-    return Point(time=relative_time, value=corrected)
+    return Point(time=corrected.timestamp, value=corrected.value)
 
 
 @router.get("/{sensor_id}/data/history", response_model=PointsList, responses={
@@ -192,10 +188,7 @@ async def get_sensor_raw_data(sensor_id: str) -> Point:
 
     idx = sid.value
     corrected = sensor_manager.sensors[idx]
-    offset = sensor_manager.offsets[idx]
-    raw_value = corrected + offset
-    relative_time = test_manager.get_relative_time()
-    return Point(time=relative_time, value=raw_value)
+    return Point(time=corrected.timestamp, value=corrected.raw_value)
 
 @router.get("/{sensor_id}/zero", response_model=OffsetResponse, responses={
     400: {
