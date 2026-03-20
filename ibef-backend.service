@@ -13,13 +13,12 @@ RestartSec=10
 WorkingDirectory=<CHANGE_ME>
 
 # Make sure the scripts are executable before starting the service
-ExecStartPre=/bin/bash -c "chmod +x scripts/hatch_check.sh"
+ExecStartPre=/bin/bash -c "chmod +x scripts/create_venv.sh"
 ExecStartPre=/bin/bash -c "chmod +x run.sh"
 
 # Check if Hatch is installed and install it if not
-ExecStartPre=/bin/bash -c "./scripts/hatch_check.sh"
-
-ExecStart=/bin/bash -c "./run.sh api"
+ExecStart=/bin/bash -c "./scripts/create_venv.sh"
+ExecStart=/bin/bash -c "source .venv/bin/activate && ./run.sh api"
 
 [Install]
 WantedBy=multi-user.target
