@@ -247,7 +247,9 @@ class TestManager:
         
         raw_csv = open(os.path.join(self.current_test_dir, "raw_data.csv"), 'r')
         data_csv = open(os.path.join(self.current_test_dir, "data.csv"), 'w', newline='')
-        data_csv_writer = csv.DictWriter(data_csv, fieldnames=["timestamp", "relative_time"] + [sensor.name for sensor in SensorId])
+        headers = ["timestamp", "relative_time"] + [sensor.name for sensor in SensorId]
+        data_csv_writer = csv.DictWriter(data_csv, fieldnames=headers)
+        data_csv_writer.writeheader()
         raw_list: list[list[tuple[float, float]]] = [[] for _ in SensorId]
         reader = csv.DictReader(raw_csv)
         
