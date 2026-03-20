@@ -285,9 +285,9 @@ class TestManager:
                 before = None
                 after = None
                 for t, val in data_points:
-                    if not math.isnan(t) and t < wantedTime:
+                    if not math.isnan(t) and not math.isnan(val) and t < wantedTime:
                         before = (t, val)
-                    elif not math.isnan(t) and t > wantedTime and before is not None:
+                    elif not math.isnan(t) and not math.isnan(val) and t > wantedTime and before is not None:
                         after = (t, val)
                         break
                 
@@ -370,6 +370,7 @@ class TestManager:
         rel_time = t - self.start_time
         sensor_id = sensor_data.sensor_id
         value = sensor_data.value
+        raw_value = sensor_data.raw_value
         
         if sensor_id == SensorId.DISP_1:
             self.graphique_disp1_history = (sensor_data, self.graphique_disp1_history[1])
@@ -416,7 +417,7 @@ class TestManager:
             "timestamp": f"{t:.{self.time_decimals}f}",
             "relative_time": f"{rel_time:.{self.time_decimals}f}",
             "sensor_id": sensor_id.name,
-            "raw_value": _format_raw_value(sensor_id, value),
+            "raw_value": _format_raw_value(sensor_id, raw_value),
             "offset": _format_raw_value(sensor_id, sensor_data.offset)
         }
         self.raw_csv_writer.writerow(row)
