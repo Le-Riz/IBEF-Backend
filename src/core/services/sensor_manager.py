@@ -201,7 +201,7 @@ class SensorManager:
         else:
             time = math.nan
         
-        if sender_id and val is not None:
+        if sender_id and val is not None and time is not math.nan:
             self._notify(sensorId, time, val)
 
     def _calculate_arc(self, data: SensorData):
