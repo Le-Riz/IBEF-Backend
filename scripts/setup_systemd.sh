@@ -26,9 +26,9 @@ fi
 if command -v sudo >/dev/null 2>&1; then
     sudo systemctl daemon-reload
     sudo systemctl enable ibef-backend.service
-    sudo systemctl start ibef-backend.service
+    sudo systemctl restart ibef-backend.service
 else
     systemctl daemon-reload
     systemctl enable ibef-backend.service
-    systemctl start ibef-backend.service
+    systemctl restart ibef-backend.service
 fi

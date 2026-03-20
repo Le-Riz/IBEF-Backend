@@ -6,7 +6,7 @@ StartLimitIntervalSec=600
 StartLimitBurst=5
 
 [Service]
-Type=oneshot
+Type=simple
 Restart=on-failure
 RestartSec=10
 # Limit the number of restart attempts to 5 within a 10 minute window to prevent infinite restart loops
@@ -17,9 +17,9 @@ WorkingDirectory=<CHANGE_ME>
 ExecStartPre=/bin/bash -c "chmod +x scripts/create_venv.sh"
 ExecStartPre=/bin/bash -c "chmod +x run.sh"
 
-# Check if Hatch is installed and install it if not
-ExecStart=/bin/bash -c "./scripts/create_venv.sh"
-ExecStart=/bin/bash -c "source .venv/bin/activate && ./run.sh api"
+# Prepare the virtual environment before launching the API process
+ExecStartPre=/bin/bash -lc "./scripts/create_venv.sh"
+ExecStart=/bin/bash -lc "source .venv/bin/activate && exec ./run.sh api"
 
 [Install]
 WantedBy=multi-user.target
