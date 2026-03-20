@@ -3,20 +3,20 @@ set -euo pipefail
 
 case "${1:-api}" in
   api)
-    hatch run api
+    cd src && uvicorn main:app --reload --host 0.0.0.0 --port 8000
     ;;
   test)
-    hatch run test
+    pytest
     ;;
   doc)
-    hatch run python scripts/export_openapi.py
-    hatch run docs:serve
+    python scripts/export_openapi.py
+    mkdocs serve
     ;;
   export-openapi)
-    hatch run export-openapi
+    python scripts/export_openapi.py && mkdocs build
     ;;
   build-docs)
-    hatch run docs:export-schema
+    python scripts/export_openapi.py && mkdocs build
     ;;
   *)
     echo "Usage: $0 [api|test|doc|export-openapi|build-docs]"
