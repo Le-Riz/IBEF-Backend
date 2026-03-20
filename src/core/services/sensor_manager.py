@@ -202,8 +202,16 @@ class SensorManager:
             time = math.nan
         
         if sender_id and val is not None and time is not math.nan:
+            #####################################################################################
+            #                                                                                   #
+            #                               !!!!! WARNING !!!!!                                 #
+            # TODO: Remove this workaround once sensors stop sending zero values randomly       #
+            #                                                                                   #
+            #####################################################################################
             if val < 0.01:
+                val = math.nan
                 logger.warning(f" LINE: {line}, val: {val}, time: {time}, sender_id: {sender_id}")
+                
             self._notify(sensorId, time, val)
 
     def _calculate_arc(self, data: SensorData):
