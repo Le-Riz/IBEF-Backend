@@ -62,7 +62,8 @@ class TestManager:
         
         # PIL Images for graphiques (DISP_1 and ARC)
         self.graphique_disp1 = Graphique(SensorId.DISP_1, SensorId.FORCE, GraphiqueConfig())
-        self.graphique_arc = Graphique(SensorId.ARC, SensorId.FORCE, GraphiqueConfig(x_min=-5.0))
+        arc_config = config_loader.get_sensor_config(SensorId.ARC)
+        self.graphique_arc = Graphique(SensorId.ARC, SensorId.FORCE, GraphiqueConfig(x_min=-arc_config.max))
 
         self.graphique_disp1_history: tuple[SensorData, SensorData] = (SensorData(0.0, SensorId.DISP_1, math.nan), SensorData(0.0, SensorId.FORCE, math.nan))
         self.graphique_arc_history: tuple[SensorData, SensorData] = (SensorData(0.0, SensorId.ARC, math.nan), SensorData(0.0, SensorId.FORCE, math.nan))
