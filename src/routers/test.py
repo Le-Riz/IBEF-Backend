@@ -231,6 +231,14 @@ async def list_current_test_files() -> dict:
                 "example": {"detail": "No test prepared. Call POST /info first."}
             }
         }    },
+    400: {
+        "description": "Invalid base64 encoded file content.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Invalid base64 encoded file content: Incorrect padding"}
+            }
+        }
+    },
     500: {
         "description": "Failed to add file to test.",
         "content": {
