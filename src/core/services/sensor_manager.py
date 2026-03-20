@@ -149,6 +149,9 @@ class SensorManager:
 
     def _parse_force(self, sensorId: SensorId, time: float, line: str):
         # ASC2 20945595 -165341 -1.527986e-01 -4.965955e+01 -0.000000e+00
+        if not line or "ASC2" not in line:
+            return
+        
         parts = line.split()
         if len(parts) >= 5:
             try:
@@ -159,6 +162,9 @@ class SensorManager:
 
     def _parse_motion(self, sensorId: SensorId, time: float, line: str):
         # 76 144 262 us SPC_VAL usSenderId=0x2E01 ulMicros=76071216 Val=0.000
+        if not line or "SPC_VAL" not in line:
+            return
+        
         parts = line.split()
         sender_id = None
         val = None
