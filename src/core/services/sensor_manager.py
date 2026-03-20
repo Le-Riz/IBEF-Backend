@@ -200,15 +200,21 @@ class SensorManager:
 
     def _calculate_arc(self, data: SensorData):
         if (data.sensor_id in self.arc_sensor_dependencies):
-            if(not math.isnan(self.sensors[SensorId.DISP_1.value].value) and
-               not math.isnan(self.sensors[SensorId.DISP_2.value].value) and
-               not math.isnan(self.sensors[SensorId.DISP_3.value].value)):
-                self.sensors[SensorId.ARC.value].raw_value = self.sensors[SensorId.DISP_1.value].raw_value - (self.sensors[SensorId.DISP_2.value].raw_value + self.sensors[SensorId.DISP_3.value].raw_value) / 2
-                self.sensors[SensorId.ARC.value].value = self.sensors[SensorId.DISP_1.value].value - (self.sensors[SensorId.DISP_2.value].value + self.sensors[SensorId.DISP_3.value].value) / 2
-                self.sensors[SensorId.ARC.value].offset = self.sensors[SensorId.DISP_1.value].offset - (self.sensors[SensorId.DISP_2.value].offset + self.sensors[SensorId.DISP_3.value].offset) / 2
-                self.sensors[SensorId.ARC.value].timestamp = data.timestamp
+            disp1 = self.sensors[SensorId.DISP_1.value]
+            disp2 = self.sensors[SensorId.DISP_2.value]
+            disp3 = self.sensors[SensorId.DISP_3.value]
+            arc = self.sensors[SensorId.ARC.value]
+            
+            if(not math.isnan(disp1.value) and
+               not math.isnan(disp2.value) and
+               not math.isnan(disp3.value)):
+                arc.raw_value = disp1.raw_value - (disp2.raw_value + disp3.raw_value) / 2
+                arc.value = disp1.value - (disp2.value + disp3.value) / 2
+                arc.offset = disp1.offset - (disp2.offset + disp3.offset) / 2
+                arc.timestamp = data.timestamp
+                self.sensors[SensorId.ARC.value] = arc
 
-                return self.sensors[SensorId.ARC.value]
+                return arc
         return None
 
     async def _emulate_data(self, start_time):
