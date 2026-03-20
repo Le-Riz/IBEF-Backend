@@ -6,6 +6,7 @@ StartLimitIntervalSec=600
 StartLimitBurst=5
 
 [Service]
+Type=oneshot
 Restart=on-failure
 RestartSec=10
 # Limit the number of restart attempts to 5 within a 10 minute window to prevent infinite restart loops
