@@ -10,12 +10,12 @@ from core.services.sensor_manager import sensor_manager
 router = APIRouter(prefix="/graph", tags=["graph"])
 
 
-@router.get("/{sensor_name}", response_class=StreamingResponse, responses={
+@router.get("/{sensor_id}", response_class=StreamingResponse, responses={
     400: {
-        "description": "Invalid sensor_name provided.",
+        "description": "Invalid sensor_id provided.",
         "content": {
             "application/json": {
-                "example": {"detail": "sensor_name must be 'DISP_1' or 'ARC'"}
+                "example": {"detail": "sensor_id must be 'DISP_1' or 'ARC'"}
             }
         }
     },
@@ -37,26 +37,26 @@ router = APIRouter(prefix="/graph", tags=["graph"])
     }
 })
 async def get_graphique(
-    sensor_name: str = Path(..., description="Sensor name: DISP_1 or ARC")
+    sensor_id: str = Path(..., description="Sensor name: DISP_1 or ARC")
 ):
     """
     Get the current test graphique as PNG image.
     
     Args:
-        sensor_name: Either 'DISP_1' or 'ARC' for X-axis sensor
+        sensor_id: Either 'DISP_1' or 'ARC' for X-axis sensor
     
     Y-axis: FORCE
     Points are added in real-time as data is processed.
     """
-    if sensor_name not in ['DISP_1', 'ARC']:
-        raise HTTPException(status_code=400, detail="sensor_name must be 'DISP_1' or 'ARC'")
+    if sensor_id not in ['DISP_1', 'ARC']:
+        raise HTTPException(status_code=400, detail="sensor_id must be 'DISP_1' or 'ARC'")
     
     # For DISP_1 X-axis, check DISP_1 connection
-    if sensor_name == 'DISP_1':
+    if sensor_id == 'DISP_1':
         if not sensor_manager.is_sensor_connected(SensorId.DISP_1):
             raise HTTPException(status_code=503, detail="Sensor DISP_1 is not connected")
     # For ARC X-axis, check DISP_2 and DISP_3 connection (ARC is calculated from DISP_2, DISP_3)
-    else:  # sensor_name == 'ARC'
+    else:  # sensor_id == 'ARC'
         if not sensor_manager.is_sensor_connected(SensorId.ARC):
             raise HTTPException(status_code=503, detail="Sensors DISP_2 and DISP_3 are not connected (required for ARC calculation)")
     
@@ -68,21 +68,21 @@ async def get_graphique(
         raise HTTPException(status_code=409, detail=f"No test is currently running.")
     
     
-    png_data = test_manager.get_graphique_png(sensor_name)
+    png_data = test_manager.get_graphique_png(sensor_id)
     
     return StreamingResponse(
         io.BytesIO(png_data),
         media_type="image/png",
-        headers={"Content-Disposition": f"inline; filename=graph_{sensor_name}.png"}
+        headers={"Content-Disposition": f"inline; filename=graph_{sensor_id}.png"}
     )
 
 
-@router.get("/{sensor_name}/base64", responses={
+@router.get("/{sensor_id}/base64", responses={
     400: {
-        "description": "Invalid sensor_name provided.",
+        "description": "Invalid sensor_id provided.",
         "content": {
             "application/json": {
-                "example": {"detail": "sensor_name must be 'DISP_1' or 'ARC'"}
+                "example": {"detail": "sensor_id must be 'DISP_1' or 'ARC'"}
             }
         }
     },
@@ -104,26 +104,26 @@ async def get_graphique(
     }
 })
 async def get_graphique_base64(
-    sensor_name: str = Path(..., description="Sensor name: DISP_1 or ARC")
+    sensor_id: str = Path(..., description="Sensor name: DISP_1 or ARC")
 ):
     """
     Get the current test graphique as base64-encoded PNG.
     
     Args:
-        sensor_name: Either 'DISP_1' or 'ARC' for X-axis sensor
+        sensor_id: Either 'DISP_1' or 'ARC' for X-axis sensor
     
     Useful for embedding in frontend applications.
     Returns: {"data": "data:image/png;base64,..."}
     """
-    if sensor_name not in ['DISP_1', 'ARC']:
-        raise HTTPException(status_code=400, detail="sensor_name must be 'DISP_1' or 'ARC'")
+    if sensor_id not in ['DISP_1', 'ARC']:
+        raise HTTPException(status_code=400, detail="sensor_id must be 'DISP_1' or 'ARC'")
     
     # For DISP_1 X-axis, check DISP_1 connection
-    if sensor_name == 'DISP_1':
+    if sensor_id == 'DISP_1':
         if not sensor_manager.is_sensor_connected(SensorId.DISP_1):
             raise HTTPException(status_code=503, detail="Sensor DISP_1 is not connected")
     # For ARC X-axis, check DISP_2 and DISP_3 connection (ARC is calculated from DISP_2, DISP_3)
-    else:  # sensor_name == 'ARC'
+    else:  # sensor_id == 'ARC'
         if not sensor_manager.is_sensor_connected(SensorId.ARC):
             raise HTTPException(status_code=503, detail="Sensors DISP_2 and DISP_3 are not connected (required for ARC calculation)")
     
@@ -134,7 +134,7 @@ async def get_graphique_base64(
     if not test_manager.get_test_state() == TestState.RUNNING:
         raise HTTPException(status_code=409, detail=f"No test is currently running.")
     
-    png_data = test_manager.get_graphique_png(sensor_name)
+    png_data = test_manager.get_graphique_png(sensor_id)
     base64_data = base64.b64encode(png_data).decode('utf-8')
     
     return {
