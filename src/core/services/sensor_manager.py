@@ -208,7 +208,7 @@ class SensorManager:
             # TODO: Remove this workaround once sensors stop sending zero values randomly       #
             #                                                                                   #
             #####################################################################################
-            if val < 0.01:
+            if val < 0.02:
                 val = math.nan
                 logger.warning(f" LINE: {line}, val: {val}, time: {time}, sender_id: {sender_id}")
                 
