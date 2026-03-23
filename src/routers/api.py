@@ -1,3 +1,9 @@
+"""Main API router aggregating all sub-routers.
+
+This module serves as the entry point for all API endpoints, combining routers
+for history, test management, sensor operations, and graphique data visualization.
+"""
+
 from fastapi import APIRouter
 
 from routers import history, test, sensor, graphique

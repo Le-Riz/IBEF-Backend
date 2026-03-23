@@ -1,163 +1,124 @@
-# Developer guide
+# Developer Guide
 
-## Prerequisites
+## Architecture Overview
 
-- Python 3.10+
-- [Hatch](https://hatch.pypa.io) (install with `pipx install hatch`)
+```
+src/
+├── main.py                 # FastAPI application entry point
+├── schemas.py             # Pydantic response models
+├── core/                  # Core business logic
+│   ├── config_loader.py   # Configuration management
+│   ├── service_manager.py # Service orchestration
+│   ├── models/            # Data structures and models
+│   ├── services/          # Microservices (sensor, serial, test)
+│   └── processing/        # Data processing pipeline
+└── routers/               # API endpoints
+    ├── api.py            # Main router aggregation
+    ├── sensor.py         # Sensor operations
+    ├── test.py           # Test management
+    ├── history.py        # Historical data
+    └── graphique.py      # Data visualization
+```
 
-## Common tasks
+## Core Services
 
+### Sensor Manager
+::: src.core.services.sensor_manager
+    options:
+      show_root_heading: false
+
+### Serial Handler
+::: src.core.services.serial_handler
+    options:
+      show_root_heading: false
+
+### Test Manager
+::: src.core.services.test_manager
+    options:
+      show_root_heading: false
+
+## Configuration
+
+### Config Loader
+::: src.core.config_loader
+    options:
+      show_root_heading: false
+
+## Development Workflow
+
+### Setup
 ```bash
-# start dev server
-hatch run api
-# or: ./run.sh
-# or: ./run.sh api
+# Create virtual environment
+bash scripts/create_venv.sh
 
-# run tests
-hatch run test
-# or: ./run.sh test
-
-# lint
-hatch run lint
-
-# type-check
-hatch run typecheck
-
-# serve documentation
-hatch run docs:serve
-# or: ./run.sh doc
-
-# build static docs
-hatch run docs:build
+# Install with dev dependencies
+pip install -e '.[dev]'
 ```
 
-## Documentation
-
+### Running the Application
 ```bash
-# live docs server
-hatch run docs:serve
-# or: ./run.sh doc
-
-# export OpenAPI schema
-hatch run export-openapi
-# or: ./run.sh export-openapi
-
-# build static site with OpenAPI schema
-hatch run docs:export-schema
-# or: ./run.sh build-docs
+# Start the server
+python src/main.py
 ```
 
-MkDocs sources live under `docs/`. Adjust navigation in `mkdocs.yml` when adding new pages.
-
-The OpenAPI schema is automatically generated from the FastAPI app and embedded in the static documentation, making it available on GitHub Pages without requiring a running API.
-
----
-
-## Architecture
-
-### Core Components
-
-**CircularBuffer** (`src/core/models/circular_buffer.py`)
-- Fixed-capacity buffer with O(1) append and access
-- Optimized for speed: `__slots__`, bitwise modulo for power-of-2 capacities
-- Supports bulk retrieval with automatic wrap detection
-
-**SensorDataStorage** (`src/core/models/circular_buffer.py`)
-- Manages multiple sensor buffers (FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5)
-- Precomputes all window offsets at initialization (O(1) lookup)
-- Returns exactly 300 points per duration with uniform spacing
-
-**DataProcessor** (`src/core/processing/data_processor.py`)
-- Runs at **10 Hz** (100ms intervals)
-- Receives raw sensor data, applies calibration, stores in circular buffers
-- Publishes `data_received` event for each point
-
-**TestManager** (`src/core/services/test_manager.py`)
-- Manages test lifecycle: start, stop, pause, resume
-- Persists data to disk (metadata.json, data.csv, raw.log)
-- Integrates with circular buffers via SensorDataStorage
-- Publishes test state change events
-
-### Data Flow
-
-```
-Serial Data → SerialHandler → DataProcessor (10 Hz) → Circular Buffers
-                                        ↓
-                        Published: data_received event
-                                        ↓
-                        API endpoints consume buffer data
-                                        ↓
-                        TestManager persists on disk
-```
-
-### Storage
-
-- **`storage/data/`** — Active test data (temporary, cleared between tests)
-- **`storage/data/test_data/`** — Persistent test histories
-- **`storage/data/archived_data/`** — Archived tests
-
-Each test directory contains:
-- `metadata.json` — Test metadata (TestMetaData model)
-- `data.csv` — Processed sensor data
-- `raw.log` — Raw uncalibrated data
-
----
-
-## Performance Characteristics
-
-### Insertion (append)
-- **Time:** O(1) constant time
-- **Speed:** Single tuple assignment + index update
-- **Memory:** Fixed capacity, no reallocation
-
-### History Query (`get_data_for_window_seconds`)
-- **Time:** O(1) for full windows (uses precomputed offsets)
-- **Time:** O(n) for partial windows (n = number of points)
-- **Maximum points:** 300 (fixed, ensures predictable latency)
-
-### Bulk Retrieval (`get_all`)
-- **Time:** O(n) where n = number of valid points
-- **Speed:** Direct memory access, automatic wrap-aware copy
-
-### Test History List
-- **Time:** O(1) — reads test_manager.test_history list
-- **Storage:** Disk I/O only on test start/stop
-
----
-
-## Testing
-
-Run the full test suite:
+### Testing
 ```bash
-hatch run test
+# Run tests
+pytest
+
+# Run with coverage
+pytest --cov=src
 ```
 
-Test coverage includes:
-- **CircularBuffer** — Insertion, retrieval, wrapping, bulk access
-- **SensorDataStorage** — Multi-sensor storage, window queries
-- **DataProcessor** — 10 Hz rate, calibration, event publishing
-- **Sensor API** — Get data, history with window parameter, zero calibration
-- **Test Management** — Start/stop, metadata persistence
-- **History API** — List, get, download, update, archive, delete
+## Type Safety
 
-**Current status:** 65 tests passing (100%)
+The project uses **type hints throughout** for better IDE support and error catching. Always include type annotations in new code:
 
----
+```python
+def process_sensor_data(
+    sensor_id: SensorId,
+    value: float,
+    timestamp: float
+) -> Point:
+    """Process raw sensor data."""
+    return Point(time=timestamp, value=value)
+```
 
-## Adding New Features
+## Documentation Standards
 
-### New Sensor Endpoint
-1. Add route to `src/routers/sensor.py`
-2. Query `test_manager.get_sensor_data()` or `get_sensor_history()`
-3. Return `Point` or `PointsList` model
+### Docstring Style
 
-### New History Operation
-1. Add method to `TestManager` class
-2. Add route to `src/routers/history.py`
-3. Call TestManager method and return appropriate status
+Use Google-style docstrings for consistency:
 
-### Changing Processing Rate
-1. Update `PROCESSING_RATE` constant in `src/core/processing/data_processor.py`
-2. Update TestManager's `effective_freq` calculation
-3. Rebuild SensorDataStorage to recalculate point spacing
-4. Update API documentation with new spacing values
+```python
+def calculate_moving_average(
+    values: list[float],
+    window_size: int = 10
+) -> float:
+    \"\"\"Calculate moving average of values.
+    
+    Args:
+        values: List of numeric values.
+        window_size: Number of recent values to average.
+        
+    Returns:
+        Moving average as float.
+        
+    Raises:
+        ValueError: If window_size exceeds list length.
+    \"\"\"
+    if window_size > len(values):
+        raise ValueError("Window size exceeds list length")
+    return sum(values[-window_size:]) / window_size
+```
+
+### Module Docstrings
+
+Every module should have a top-level docstring:
+
+```python
+\"\"\"Module description.
+
+Brief explanation of what this module does.
+\"\"\"
+```

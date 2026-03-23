@@ -1,19 +1,32 @@
 #!/bin/bash
 set -euo pipefail
 
+ensure_docs_dependencies() {
+  if ! python -m pip show mkdocs-material >/dev/null 2>&1; then
+    echo "Missing documentation dependency: mkdocs-material"
+    echo "Install docs dependencies with one of:"
+    echo "  python -m pip install '.[dev]'"
+    echo "  python -m pip install mkdocs mkdocs-material 'mkdocstrings[python]'"
+    exit 1
+  fi
+}
+
 case "${1:-api}" in
   api)
     cd src && uvicorn main:app --reload --host 0.0.0.0 --port 8000
     ;;
   doc)
+    ensure_docs_dependencies
     python scripts/export_openapi.py
-    mkdocs serve
+    python -m mkdocs serve
     ;;
   export-openapi)
-    python scripts/export_openapi.py && mkdocs build
+    ensure_docs_dependencies
+    python scripts/export_openapi.py && python -m mkdocs build
     ;;
   build-docs)
-    python scripts/export_openapi.py && mkdocs build
+    ensure_docs_dependencies
+    python scripts/export_openapi.py && python -m mkdocs build
     ;;
   *)
     echo "Usage: $0 [api|test|doc|export-openapi|build-docs]"

@@ -5,10 +5,14 @@ repo_name: IBEF Backend
 
 nav:
   - Home: index.md
-  - API: api.md
+  - Installation: installation-guide.md
+  - Configuration: config.md
+  - Developer Guide: dev.md
+  - API Documentation:
+      - API Endpoints: api.md
+      - Data Models: models.md
   - API Reference: api-reference.md
-  - ARC Sensor: arc-sensor.md
-  - Dev guide: dev.md
+  - Serial Data: serial-data.md
 
 theme:
   name: material
@@ -61,6 +65,6 @@ markdown_extensions:
       generic: true
 
 extra_javascript:
-  - javascripts/katex.js
   - https://unpkg.com/katex@0/dist/katex.min.js
   - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+  - javascripts/katex.js

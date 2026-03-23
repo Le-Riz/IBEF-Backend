@@ -1,55 +1,54 @@
 # IBEF Backend API
 
-IBEF Backend is a FastAPI service for real-time sensor data acquisition, processing, and persistent test management.
+IBEF Backend est un service FastAPI pour l'acquisition temps reel de capteurs, le traitement des mesures et la gestion persistante des essais.
 
-## Features
+## Fonctionnalites principales
 
-- **Real-time data acquisition** — 20 Hz processing rate with 6 sensors (FORCE, DISP_1, DISP_2, DISP_3, DISP_4, DISP_5)
-- **Optimized storage** — Circular buffers with O(1) insertion and retrieval
-- **Fixed-point history** — Exactly 300 points per window (30s, 60s, 2m, 5m, 10m) with uniform spacing
-- **Test management** — Start, stop, archive, and delete test sessions
-- **Persistent storage** — Metadata in JSON, data in CSV with backup log files
-- **REST API** — Full CRUD operations on sensors and test histories
+- Acquisition capteurs en continu (FORCE, DISP_1 a DISP_5)
+- Capteur calcule `ARC` derive de DISP_1, DISP_2 et DISP_3
+- Historique a nombre de points fixe: 300 points par fenetre (30s, 60s, 120s, 300s, 600s)
+- Gestion des essais: demarrage, arret, consultation, telechargement et archivage
+- Persistance disque des metadonnees (JSON) et mesures (CSV/logs)
 
-## Quick start
+## Demarrage rapide
 
 ```bash
-# Start the API server
+# lancer l'API (mode dev)
 ./run.sh
-# or: hatch run api
 
-# Run tests
-./run.sh test
-
-# View documentation
+# lancer la documentation MkDocs
 ./run.sh doc
 ```
 
-Then open http://localhost:8000/docs for the interactive API documentation (or http://localhost:8000 for MkDocs when using `./run.sh doc`).
+Verification rapide de l'API:
 
-## Key Components
+```bash
+curl http://127.0.0.1:8000/health
+```
 
-- **Circular Buffers** — O(1) insertion with 0.1s to 2.0s point spacing depending on window
-- **Data Processor** — 10 Hz rate, applies calibration, publishes events
-- **Test Manager** — Handles test lifecycle and disk persistence
-- **REST API** — Sensor data, history queries, and test management endpoints
+Reponse attendue:
 
-## API Endpoints
+```json
+{"status":"ok","app":"IBEF Backend API"}
+```
 
-- `GET /api/sensor/{sensor_id}/data` — Latest calibrated data
-- `GET /api/sensor/{sensor_id}/data/history?window=30` — 300 points with uniform spacing
-- `PUT /api/test/start` — Start a new test session
-- `PUT /api/test/stop` — Stop current test
-- `GET /api/history` — List all test histories
-- `GET /api/history/{name}/download` — Download test data as ZIP
-- `PUT /api/history/{name}/archive` — Archive a test
+## Acces API
 
-## Documentation
+- Endpoint de sante: `GET /health`
+- Documentation interactive complete: voir [API Reference (interactive)](api-reference.md)
+- Pour les details de contrats (schemas, codes de retour, exemples), privilegier la reference OpenAPI plutot qu'une liste partielle ici.
 
-- **[API Reference (Interactive)](api-reference.md)** — Full OpenAPI documentation with ReDoc
-- **[API Overview](api.md)** — Quick reference and examples
-- **[Sensor Connection Management](sensor-connection-management.md)** — Connection states, reconnection strategy, error handling
-- **[Sensor Configuration](sensor-config.md)** — Sensor setup and calibration
-- **[Auto-Detection](auto-sensor-detection.md)** — Automatic port detection
-- **[ARC Sensor](arc-sensor.md)** — ARC calculation and usage
-- **[Developer Guide](dev.md)** — Architecture, performance, and contribution guidelines
+## Documentation disponible
+
+- [Guide d'installation](installation-guide.md) : installation sur nouveau systeme Linux + service systemd
+- [Configuration capteurs](config.md) : structure et utilite de `config/sensors_config.json`
+- [Lecture serial](serial-data.md) : format des trames FORCE/DISP et chaine de traitement
+- [API Reference (interactive)](api-reference.md) : specification OpenAPI complete embarquee dans MkDocs
+
+## Notes techniques
+
+- Le capteur `ARC` suit la relation metier:
+
+	$$ARC = DISP_1 - \frac{DISP_2 + DISP_3}{2}$$
+
+- Les historiques utilisent un echantillonnage uniforme pour garantir une charge memoire stable et des reponses API predictibles.

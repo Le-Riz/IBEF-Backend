@@ -452,6 +452,116 @@
         }
       }
     },
+    "/api/history/{name}/treatment": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Get Treatment",
+        "description": "Get the treatment.json content for a test history.\nReturns the JSON content as a dictionary.",
+        "operationId": "get_treatment_api_history__name__treatment_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Treatment Api History  Name  Treatment Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Test history or treatment not found.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Treatment not found for test test_123"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history/{name}/treatment-image": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Get Treatment Image",
+        "description": "Get the treatment image for a test history.\nReturns the image as a PNG stream.",
+        "operationId": "get_treatment_image_api_history__name__treatment_image_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Treatment Image Api History  Name  Treatment Image Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Test history or treatment image not found.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Treatment image not found for test test_123"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/test/running": {
       "get": {
         "tags": [
@@ -475,6 +585,36 @@
       }
     },
     "/api/test/info": {
+      "get": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Get Current Test Info",
+        "description": "Return the metadata of the current prepared/test in memory.\n\nReturns 409 if no test metadata was prepared via POST /info.",
+        "operationId": "get_current_test_info_api_test_info_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Current Test Info Api Test Info Get"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No test prepared. Call POST /info first.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test prepared. Call POST /info first."
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "test"
@@ -658,6 +798,233 @@
         }
       }
     },
+    "/api/test/files": {
+      "get": {
+        "tags": [
+          "test"
+        ],
+        "summary": "List Current Test Files",
+        "description": "List the files that have been added to the current test.\n\nReturns a list of filenames that have been uploaded via POST /files for the current test.\nAvailable after POST /info has been called.",
+        "operationId": "list_current_test_files_api_test_files_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Current Test Files Api Test Files Get"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No test prepared. Call POST /info first.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test prepared. Call POST /info first."
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Add File To Current Test",
+        "description": "Add a file to the current test.\n\nThe file is saved in the current test directory and will be part of the test record.\nAvailable after POST /info has been called.\n\nRequest body:\n```json\n{\n    \"file\": \"<base64-encoded file content>\",\n    \"filename\": \"example.txt\"\n}\n```",
+        "operationId": "add_file_to_current_test_api_test_files_post",
+        "parameters": [
+          {
+            "name": "file",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream",
+              "title": "File"
+            }
+          },
+          {
+            "name": "filename",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filename"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "No test prepared. Call POST /info first.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test prepared. Call POST /info first."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid base64 encoded file content.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Invalid base64 encoded file content: Incorrect padding"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to add file to test.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Failed to add file to test: No test directory available."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/test/files/{filename}": {
+      "delete": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Delete File From Current Test",
+        "description": "Delete a file from the current test.\n\nRemoves the specified file from the test directory and the tracked file list.\nAvailable after POST /info has been called.",
+        "operationId": "delete_file_from_current_test_api_test_files__filename__delete",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filename"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "No test prepared. Call POST /info first.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test prepared. Call POST /info first."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found in current test.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "File example.txt not found in current test."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "test"
+        ],
+        "summary": "Get File From Current Test",
+        "description": "Retrieve a file from the current test.\n\nReturns the content of the specified file that was added to the current test.\nAvailable after POST /info has been called.\n\nResponse body:\n```json\n{\n    \"file\": \"<base64-encoded file content>\"\n}\n```",
+        "operationId": "get_file_from_current_test_api_test_files__filename__get",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filename"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "contentMediaType": "application/octet-stream",
+                  "title": "Response Get File From Current Test Api Test Files  Filename  Get"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No test prepared. Call POST /info first.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test prepared. Call POST /info first."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found in current test.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "File example.txt not found in current test."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/test/finalize": {
       "put": {
         "tags": [
@@ -686,6 +1053,28 @@
               "application/json": {
                 "example": {
                   "detail": "Test is not stopped. Call PUT /stop first."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sensor": {
+      "get": {
+        "tags": [
+          "sensor"
+        ],
+        "summary": "Get Sensors All",
+        "description": "Get the latest data points from all sensors, including raw values, calibrated values, and zero offsets.",
+        "operationId": "get_sensors_all_api_sensor_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DictPoint"
                 }
               }
             }
@@ -1028,23 +1417,23 @@
         }
       }
     },
-    "/api/graph/{sensor_name}": {
+    "/api/graph/{sensor_id}": {
       "get": {
         "tags": [
           "graph"
         ],
         "summary": "Get Graphique",
-        "description": "Get the current test graphique as PNG image.\n\nArgs:\n    sensor_name: Either 'DISP_1' or 'ARC' for X-axis sensor\n\nY-axis: FORCE\nPoints are added in real-time as data is processed.",
-        "operationId": "get_graphique_api_graph__sensor_name__get",
+        "description": "Get the current test graphique as PNG image.\n\nArgs:\n    sensor_id: Either 'DISP_1' or 'ARC' for X-axis sensor\n\nY-axis: FORCE\nPoints are added in real-time as data is processed.",
+        "operationId": "get_graphique_api_graph__sensor_id__get",
         "parameters": [
           {
-            "name": "sensor_name",
+            "name": "sensor_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "description": "Sensor name: DISP_1 or ARC",
-              "title": "Sensor Name"
+              "title": "Sensor Id"
             },
             "description": "Sensor name: DISP_1 or ARC"
           }
@@ -1054,11 +1443,11 @@
             "description": "Successful Response"
           },
           "400": {
-            "description": "Invalid sensor_name provided.",
+            "description": "Invalid sensor_id provided.",
             "content": {
               "application/json": {
                 "example": {
-                  "detail": "sensor_name must be 'DISP_1' or 'ARC'"
+                  "detail": "sensor_id must be 'DISP_1' or 'ARC'"
                 }
               }
             }
@@ -1069,6 +1458,16 @@
               "application/json": {
                 "example": {
                   "detail": "Sensor FORCE is not connected"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No test is currently running.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test is currently running."
                 }
               }
             }
@@ -1086,23 +1485,23 @@
         }
       }
     },
-    "/api/graph/{sensor_name}/base64": {
+    "/api/graph/{sensor_id}/base64": {
       "get": {
         "tags": [
           "graph"
         ],
         "summary": "Get Graphique Base64",
-        "description": "Get the current test graphique as base64-encoded PNG.\n\nArgs:\n    sensor_name: Either 'DISP_1' or 'ARC' for X-axis sensor\n\nUseful for embedding in frontend applications.\nReturns: {\"data\": \"data:image/png;base64,...\"}",
-        "operationId": "get_graphique_base64_api_graph__sensor_name__base64_get",
+        "description": "Get the current test graphique as base64-encoded PNG.\n\nArgs:\n    sensor_id: Either 'DISP_1' or 'ARC' for X-axis sensor\n\nUseful for embedding in frontend applications.\nReturns: {\"data\": \"data:image/png;base64,...\"}",
+        "operationId": "get_graphique_base64_api_graph__sensor_id__base64_get",
         "parameters": [
           {
-            "name": "sensor_name",
+            "name": "sensor_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "description": "Sensor name: DISP_1 or ARC",
-              "title": "Sensor Name"
+              "title": "Sensor Id"
             },
             "description": "Sensor name: DISP_1 or ARC"
           }
@@ -1117,11 +1516,11 @@
             }
           },
           "400": {
-            "description": "Invalid sensor_name provided.",
+            "description": "Invalid sensor_id provided.",
             "content": {
               "application/json": {
                 "example": {
-                  "detail": "sensor_name must be 'DISP_1' or 'ARC'"
+                  "detail": "sensor_id must be 'DISP_1' or 'ARC'"
                 }
               }
             }
@@ -1132,6 +1531,16 @@
               "application/json": {
                 "example": {
                   "detail": "Sensor FORCE is not connected"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No test is currently running.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "No test is currently running."
                 }
               }
             }
@@ -1168,7 +1577,41 @@
           "status",
           "app"
         ],
-        "title": "AppHealthOK"
+        "title": "AppHealthOK",
+        "description": "Application-level health check response.\n\nAttributes:\n    status: Health status as string.\n    app: Application name or version."
+      },
+      "DictPoint": {
+        "properties": {
+          "raw": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Point"
+            },
+            "type": "object",
+            "title": "Raw"
+          },
+          "data": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Point"
+            },
+            "type": "object",
+            "title": "Data"
+          },
+          "zeros": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/OffsetResponse"
+            },
+            "type": "object",
+            "title": "Zeros"
+          }
+        },
+        "type": "object",
+        "required": [
+          "raw",
+          "data",
+          "zeros"
+        ],
+        "title": "DictPoint",
+        "description": "Complete sensor data with raw, processed, and offset values.\n\nAttributes:\n    raw: Dictionary of raw sensor measurements by sensor ID.\n    data: Dictionary of processed sensor measurements by sensor ID.\n    zeros: Dictionary of sensor offset calibrations by sensor ID."
       },
       "HTTPValidationError": {
         "properties": {
@@ -1197,7 +1640,8 @@
         "required": [
           "list"
         ],
-        "title": "HistoryList"
+        "title": "HistoryList",
+        "description": "List of historical data identifiers.\n\nAttributes:\n    list: Collection of history file or record identifiers."
       },
       "OffsetResponse": {
         "properties": {
@@ -1210,7 +1654,8 @@
         "required": [
           "offset"
         ],
-        "title": "OffsetResponse"
+        "title": "OffsetResponse",
+        "description": "Sensor offset calibration response.\n\nAttributes:\n    offset: Offset value for sensor calibration."
       },
       "Point": {
         "properties": {
@@ -1228,7 +1673,8 @@
           "time",
           "value"
         ],
-        "title": "Point"
+        "title": "Point",
+        "description": "Single data point with timestamp.\n\nAttributes:\n    time: Timestamp in seconds.\n    value: Numeric value of the measurement."
       },
       "PointsList": {
         "properties": {
@@ -1244,7 +1690,8 @@
         "required": [
           "list"
         ],
-        "title": "PointsList"
+        "title": "PointsList",
+        "description": "List of data points.\n\nAttributes:\n    list: Collection of Point objects."
       },
       "TestMetaData": {
         "properties": {
@@ -1289,6 +1736,11 @@
             "title": "Sensor Spacing",
             "default": 0.0
           },
+          "ext_sensor_spacing": {
+            "type": "number",
+            "title": "Ext Sensor Spacing",
+            "default": 0.0
+          },
           "ext_support_spacing": {
             "type": "number",
             "title": "Ext Support Spacing",
@@ -1307,8 +1759,7 @@
           "operator_name",
           "specimen_code"
         ],
-        "title": "TestMetaData",
-        "description": "Data class representing metadata for a test.\nCompatible with both dataclass operations and Pydantic validation."
+        "title": "TestMetaData"
       },
       "TestState": {
         "type": "string",
@@ -1331,7 +1782,8 @@
         "required": [
           "status"
         ],
-        "title": "TestStatusResponse"
+        "title": "TestStatusResponse",
+        "description": "Test execution status response.\n\nAttributes:\n    status: Current state of the test (e.g., running, completed, failed)."
       },
       "ValidationError": {
         "properties": {
@@ -1356,6 +1808,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",
