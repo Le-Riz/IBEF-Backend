@@ -89,6 +89,7 @@ class SerialHandler:
         self.sensor_id = sensor_id
         self.queue = queue
         self.running = False
+        self._drop_count = 0
         
     def start(self):
         self.running = True
@@ -98,6 +99,8 @@ class SerialHandler:
         self.running = False
         if self.serial and self.serial.is_open:
             self.serial.close()
+        if self._drop_count > 0:
+            logger.warning(f"SerialHandler {self.sensor_id.name}: total dropped frames = {self._drop_count}")
     
     async def read_serial(self):
         while self.running:
@@ -128,6 +131,11 @@ class SerialHandler:
                         if self.queue.full():
                             try:
                                 self.queue.get_nowait()
+                                self._drop_count += 1
+                                if self._drop_count % 100 == 1:
+                                    logger.warning(
+                                        f"{self.sensor_id.name}: dropped {self._drop_count} frames (queue full)"
+                                    )
                             except asyncio.QueueEmpty:
                                 pass
                         await self.queue.put((self.sensor_id, decoded_line, timestamp))

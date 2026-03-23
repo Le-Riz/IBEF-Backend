@@ -20,6 +20,7 @@ from core.models.circular_buffer import SensorDataStorage
 from core.config_loader import config_loader
 from core.processing.graphique import Graphique, GraphiqueConfig
 from core.services.sensor_manager import sensor_manager
+from core.services.file_writer import FileWriter
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +53,8 @@ class TestManager:
         
         self.start_time = 0.0
         
-        # File handles
-        self.raw_file = None           # raw.log - raw serial input
-        self.raw_csv_file = None       # raw_data.csv - uncalibrated sensor data
-        self.raw_csv_writer = None
+        # Background file writer (decouples I/O from event loop)
+        self.file_writer = FileWriter()
         self.current_test_dir = None
         
         self.max_interpolation_gap = 0.5 # seconds - max gap between points to allow interpolation, otherwise leave blank in CSV
@@ -192,12 +191,10 @@ class TestManager:
         metadata = self.current_test
         # Directory and metadata already created by prepare_test()
 
-        # Open raw file
-        self.raw_file = open(os.path.join(self.current_test_dir, "raw.log"), 'w', buffering=1) # Line buffered
-        
-        # Open CSV file for raw data
-        self.raw_csv_file = open(os.path.join(self.current_test_dir, "raw_data.csv"), 'w', newline='')
-        self.raw_csv_writer = None
+        # Start background file writer for raw log + CSV
+        raw_path = os.path.join(self.current_test_dir, "raw.log")
+        csv_path = os.path.join(self.current_test_dir, "raw_data.csv")
+        self.file_writer.start(raw_path, csv_path)
         
         # Initialize both graphiques (DISP_1 and ARC)
         self.graphique_disp1.reset()
@@ -222,13 +219,8 @@ class TestManager:
 
         logger.info(f"Test stopped (recording ended): {self.current_test.test_id}")
         
-        # Close files to stop recording
-        if self.raw_file:
-            self.raw_file.close()
-            self.raw_file = None
-        if self.raw_csv_file:
-            self.raw_csv_file.close()
-            self.raw_csv_file = None
+        # Stop the background file writer (drains queue and closes files)
+        self.file_writer.stop()
         
         # Save graphiques to test directory
         self.graphique_disp1.save_graphique(self.current_test_dir, "graphique_disp1.png")
@@ -359,12 +351,12 @@ class TestManager:
         return False
 
     def _on_serial_data(self, sensor_id: SensorId, time: float, line: str):
-        if self.is_running and self.raw_file:
-            self.raw_file.write(f"[{time}] {sensor_id.name} {line}\n")
+        if self.is_running and self.file_writer.is_running:
+            self.file_writer.log_raw(f"[{time}] {sensor_id.name} {line}")
 
     def _on_raw_sensor_data(self, sensor_data: SensorData):
         """Handle raw (uncalibrated) sensor data from SensorManager."""
-        if not self.is_running or not self.raw_csv_file:
+        if not self.is_running or not self.file_writer.is_running:
             return
         
         t = sensor_data.timestamp
@@ -373,34 +365,29 @@ class TestManager:
         value = sensor_data.value
         raw_value = sensor_data.raw_value
         
+        # Offload PIL graphique plotting to the FileWriter thread
         if sensor_id == SensorId.DISP_1:
             self.graphique_disp1_history = (sensor_data, self.graphique_disp1_history[1])
             
             if not math.isnan(self.graphique_disp1_history[0].value) and not math.isnan(self.graphique_disp1_history[1].value):
-                self.graphique_disp1.plot_point_on_graphique(self.graphique_disp1_history[0].value, self.graphique_disp1_history[1].value)
+                self.file_writer.enqueue_plot(self.graphique_disp1, self.graphique_disp1_history[0].value, self.graphique_disp1_history[1].value)
         
         elif sensor_id == SensorId.ARC:
             self.graphique_arc_history = (sensor_data, self.graphique_arc_history[1])
             
             if not math.isnan(self.graphique_arc_history[0].value) and not math.isnan(self.graphique_arc_history[1].value):
-                self.graphique_arc.plot_point_on_graphique(self.graphique_arc_history[0].value, self.graphique_arc_history[1].value)
+                self.file_writer.enqueue_plot(self.graphique_arc, self.graphique_arc_history[0].value, self.graphique_arc_history[1].value)
         
         elif sensor_id == SensorId.FORCE:
             self.graphique_disp1_history = (self.graphique_disp1_history[0], sensor_data)
             if not math.isnan(self.graphique_disp1_history[0].value) and not math.isnan(self.graphique_disp1_history[1].value):
-                self.graphique_disp1.plot_point_on_graphique(self.graphique_disp1_history[0].value, self.graphique_disp1_history[1].value)
+                self.file_writer.enqueue_plot(self.graphique_disp1, self.graphique_disp1_history[0].value, self.graphique_disp1_history[1].value)
                 
             self.graphique_arc_history = (self.graphique_arc_history[0], sensor_data)
             if not math.isnan(self.graphique_arc_history[0].value) and not math.isnan(self.graphique_arc_history[1].value):
-                self.graphique_arc.plot_point_on_graphique(self.graphique_arc_history[0].value, self.graphique_arc_history[1].value)
+                self.file_writer.enqueue_plot(self.graphique_arc, self.graphique_arc_history[0].value, self.graphique_arc_history[1].value)
         
         self._store_sensor_data(sensor_data)
-        
-        # Initialize CSV writer on first raw data
-        if self.raw_csv_writer is None:
-            headers = ["timestamp", "relative_time", "sensor_id", "raw_value", "offset"]
-            self.raw_csv_writer = csv.DictWriter(self.raw_csv_file, fieldnames=headers)
-            self.raw_csv_writer.writeheader()
         
         # Format numbers according to configured precision
         def _format_raw_value(sid_name: SensorId, val: float):
@@ -421,7 +408,7 @@ class TestManager:
             "raw_value": _format_raw_value(sensor_id, raw_value),
             "offset": _format_raw_value(sensor_id, sensor_data.offset)
         }
-        self.raw_csv_writer.writerow(row)
+        self.file_writer.log_csv(row)
 
     def _store_sensor_data(self, data: SensorData, epsilon: float = 1e-6):
         """Store data in circular buffers
