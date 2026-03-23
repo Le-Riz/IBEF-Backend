@@ -1,5 +1,5 @@
 import os
-
+import queue
 import threading
 import time
 import logging
@@ -29,7 +29,7 @@ class SensorManager:
         self._emulation_task: Optional[asyncio.Task] = None
         self.offsets: list[float] = [0.0 for _ in SensorId]
         self._serial_handlers: list[SerialHandler] = []
-        self.queue: asyncio.Queue[tuple[SensorId, str, float]] = asyncio.Queue(maxsize=1024)
+        self.queue: queue.Queue[tuple[SensorId, str, float]] = queue.Queue(maxsize=1024)
         self._sensors_task: SensorsTask = SensorsTask(self.queue)
         self.notify_funcs: list[Callable[[SensorData], None]] = []
         self.zero_requests: dict[SensorId, int] = {}
@@ -243,7 +243,7 @@ class SensorManager:
             force_val = 500 + 500 * math.sin(elapsed) + random.uniform(-10, 10)
             line = f"ASC2 {int(elapsed * 1e6)} -39696 -3.577285e-02 {force_val:.6e} -0.000000e+00"
             if not self.queue.full():
-                await self.queue.put((SensorId.FORCE, line, time.time()))
+                self.queue.put_nowait((SensorId.FORCE, line, time.time()))
 
         # Emulate Displacement (Linear + Noise) with per-sensor phase offsets to avoid overlap
         phase_offsets = {
@@ -264,7 +264,7 @@ class SensorManager:
                 elapsed_us = int(elapsed * 1e6)
                 line = f"{elapsed_us} us SPC_VAL usSenderId=0x2E01 ulMicros={elapsed_us} Val={disp_val:.3f}"
                 if not self.queue.full():
-                    await self.queue.put((sensor_id, line, time.time()))
+                    self.queue.put_nowait((sensor_id, line, time.time()))
 
     def _notify(self, sensor_id: SensorId, time: float, value: float):
         if self.zero_requests.get(sensor_id, 0) > 0:
