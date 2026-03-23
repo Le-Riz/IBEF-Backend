@@ -1,3 +1,4 @@
+import base64
 import datetime
 import logging
 import math
@@ -19,6 +20,7 @@ from core.models.sensor_enum import SensorId
 from core.models.circular_buffer import SensorDataStorage
 from core.config_loader import config_loader
 from core.processing.graphique import Graphique, GraphiqueConfig
+from core.processing.treatment_module import TreatmentModule
 from core.services.sensor_manager import sensor_manager
 
 logger = logging.getLogger(__name__)
@@ -308,7 +310,7 @@ class TestManager:
 
     def finalize_test(self):
         """Move stopped test to history and clear current test."""
-        if self.current_test is None:
+        if self.current_test is None or self.current_test_dir is None:
             raise ValueError("No test to finalize.")
         
         if not self.is_stopped:
@@ -325,6 +327,12 @@ class TestManager:
         
         self.calculate_interpolated_data()
         self.create_export_csv()
+        
+        treatment = TreatmentModule(self.current_test_dir)
+        treatment.load_metadata(self.current_test)
+        treatment.load_data("data.csv")
+        treatment.process_data()
+        treatment.save_output()
         
         self.current_test = None
         self.current_test_dir = None
@@ -625,6 +633,37 @@ class TestManager:
             with open(file_path, 'rb') as f:
                 return f.read()
         
+        return None
+
+    def get_treatment_json(self, name: str) -> dict|None:
+        """Get the content of a treatment JSON file added to the current test."""
+        if self.current_test_dir is None:
+            return None
+        
+        file_path = os.path.join(ARCHIVE_DIR, name,  TreatmentModule.json_name)
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as f:
+                return json.load(f)
+        
+        return None
+
+    def get_treatment_png(self, name: str) -> bytes|None:
+        """Get the content of a treatment PNG file added to the current test."""
+        if self.current_test_dir is None:
+            return None
+        
+        file_path = os.path.join(ARCHIVE_DIR, name, TreatmentModule.image_name)
+        if os.path.exists(file_path):
+            with open(file_path, 'rb') as f:
+                return f.read()
+        
+        return None
+    
+    def get_treatment_png_base64(self, name: str) -> bytes|None:
+        """Get the content of a treatment PNG file added to the current test, encoded in base64 for API transmission."""
+        png_bytes = self.get_treatment_png(name)
+        if png_bytes is not None:
+            return base64.b64encode(png_bytes)
         return None
 
 # Global instance
