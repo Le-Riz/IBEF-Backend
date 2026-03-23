@@ -213,3 +213,47 @@ async def update_description(name: str, payload: dict) -> None:
     content = payload.get("content", "")
     if not test_manager.set_description(name, content):
         raise HTTPException(status_code=404, detail=f"Test history '{name}' not found")
+
+@router.get("/{name}/treatment", responses={
+    404: {
+        "description": "Test history or treatment not found.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Treatment not found for test test_123"}
+            }
+        }
+    }
+})
+async def get_treatment(name: str) -> dict:
+    """
+    Get the treatment.json content for a test history.
+    Returns the JSON content as a dictionary.
+    """
+    content = test_manager.get_treatment_json(name)
+    if content is not None:
+        return content
+    
+    raise HTTPException(status_code=404, detail=f"Treatment not found for test {os.name}")
+
+@router.get("/{name}/treatment-image", responses={
+    404: {
+        "description": "Test history or treatment image not found.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Treatment image not found for test test_123"}
+            }
+        }
+    }
+})
+async def get_treatment_image(name: str) -> dict:
+    """
+    Get the treatment image for a test history.
+    Returns the image as a PNG stream.
+    """
+    png_bytes = test_manager.get_treatment_png_base64(name)
+    if png_bytes is not None:
+        return {
+            "data": f"data:image/png;base64,{png_bytes}"
+        }
+    
+    raise HTTPException(status_code=404, detail=f"Treatment image not found for test {name}")
