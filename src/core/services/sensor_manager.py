@@ -128,6 +128,7 @@ class SensorManager:
             await asyncio.sleep(0.1) # Rate limit
 
     def _on_serial_data(self, sensorId: SensorId, time_val: float, line: str):
+        """Process a line of serial data for a given sensor ID and timestamp."""
         try:
             if sensorId == SensorId.FORCE:
                 self._parse_force(sensorId, time_val, line)
@@ -148,6 +149,7 @@ class SensorManager:
             self.zero_requests[sensor_id] = 3
 
     def _parse_force(self, sensorId: SensorId, time: float, line: str):
+        """Parse a line of serial data for the FORCE sensor."""
         # ASC2 20945595 -165341 -1.527986e-01 -4.965955e+01 -0.000000e+00
         if not line or "ASC2" not in line:
             return
@@ -161,6 +163,7 @@ class SensorManager:
                 pass
 
     def _parse_motion(self, sensorId: SensorId, time: float, line: str):
+        """Parse a line of serial data for the DISP sensors."""
         # 76 144 262 us SPC_VAL usSenderId=0x2E01 ulMicros=76071216 Val=0.000
         if not line or "SPC_VAL" not in line:
             return
@@ -215,6 +218,7 @@ class SensorManager:
             self._notify(sensorId, time, val)
 
     def _calculate_arc(self, data: SensorData):
+        """Calculate ARC value based on DISP_1, DISP_2, and DISP_3 if the incoming data is from one of those sensors."""
         if (data.sensor_id in self.arc_sensor_dependencies):
             disp1 = self.sensors[SensorId.DISP_1.value]
             disp2 = self.sensors[SensorId.DISP_2.value]
@@ -267,6 +271,7 @@ class SensorManager:
                     await self.queue.put((sensor_id, line, time.time()))
 
     def _notify(self, sensor_id: SensorId, time: float, value: float):
+        """Notify all registered functions with new sensor data, applying zeroing if requested."""
         if self.zero_requests.get(sensor_id, 0) > 0:
             if not math.isnan(value):
                 self.offsets[sensor_id.value] = value

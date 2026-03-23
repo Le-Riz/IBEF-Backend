@@ -91,15 +91,18 @@ class SerialHandler:
         self.running = False
         
     def start(self):
+        """Start the serial handler by launching the read loop in an asynchronous task."""
         self.running = True
         asyncio.create_task(self.read_serial())
     
     def stop(self):
+        """Stop the serial handler and close the serial port if open."""
         self.running = False
         if self.serial and self.serial.is_open:
             self.serial.close()
     
     async def read_serial(self):
+        """Continuously read from the serial port, handle reconnections, and put data into the queue."""
         while self.running:
             try:
                 if self.serial is None:

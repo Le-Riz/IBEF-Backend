@@ -56,12 +56,14 @@ class Graphique:
         self.draw_graphique_axes()
 
     def reset(self):
+        """Reset the graphique to a blank state with axes."""
         self.image = Image.new('RGBA', (self.config.width, self.config.height), (255, 255, 255, 0))
         self.draw = ImageDraw.Draw(self.image)
         self.last_point = (0,0)
         self.draw_graphique_axes()
         
     def draw_graphique_axes(self):
+        """Draw the axes, ticks, and labels for the graphique based on the configuration."""
         x_label = f"{self.Xsensor_config.displayName}"
         y_label = f"{self.Ysensor_config.displayName}"
         
@@ -162,6 +164,7 @@ class Graphique:
             )
             
     def plot_point_on_graphique(self, x_value: float, force: float):
+        """Plot a point on the graphique based on the given X sensor value and force."""
         
         if self.draw is None:
             return
@@ -192,6 +195,7 @@ class Graphique:
         self.last_point = current_point
         
     def save_graphique(self, directory: str|None, filename: str):
+        """Save the current graphique image to the specified directory with the given filename."""
         if directory is None:
             logger.warning("Cannot save graphiques: no test directory")
             return
@@ -207,7 +211,7 @@ class Graphique:
                 
                 
     def get_graphique_png(self) -> bytes:
-               
+        """Return the current graphique as PNG bytes."""
         if self.image is None:
             # Return a blank canvas if no test running
             image = Image.new('RGBA', (self.config.width, self.config.height), (255, 255, 255, 0))
