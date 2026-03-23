@@ -324,6 +324,7 @@ class TestManager:
         self.data_storage.clear_all()
         
         self.calculate_interpolated_data()
+        self.create_export_csv()
         
         self.current_test = None
         self.current_test_dir = None
@@ -336,6 +337,60 @@ class TestManager:
         
         # Reload history now that the test is finalized and cleared from memory
         self.reload_history()
+
+    def create_export_csv(self) -> None:
+        """
+        Create a comprehensive export CSV file for the current test, combining metadata, description, and data.csv content.
+        """
+        if self.current_test is None or self.current_test_dir is None:
+            logger.error("No test in memory to create export CSV for.")
+            return
+        
+        try:            
+            metadata_path = os.path.join(self.current_test_dir, "metadata.json")
+            description_path = os.path.join(self.current_test_dir, "description.md")
+            data_csv_path = os.path.join(self.current_test_dir, "data.csv")
+
+            # Read pieces if they exist
+            metadata_text = ""
+            try:
+                with open(metadata_path, 'r', encoding='utf-8') as mf:
+                    metadata_text = mf.read().strip()
+            except Exception:
+                metadata_text = ""
+
+            description_text = ""
+            try:
+                with open(description_path, 'r', encoding='utf-8') as df:
+                    description_text = df.read().strip()
+            except Exception:
+                description_text = ""
+
+            data_csv_text = ""
+            try:
+                with open(data_csv_path, 'r', encoding='utf-8') as cf:
+                    data_csv_text = cf.read().strip()
+                    data_csv_text = data_csv_text.replace(",", "\t").replace(".", ",")
+            except Exception:
+                data_csv_text = ""
+
+
+            # Compose CSV-like content: metadata, blank line, description, blank line, data.csv
+            parts = []
+            parts.append(f"\"metadata\": {metadata_text}")
+            parts.append("")
+            parts.append(description_text)
+            parts.append("")
+            parts.append(data_csv_text)
+
+            export_content = "\n".join(parts)
+            expport_csv_path = os.path.join(self.current_test_dir, "export.csv")
+            with open(expport_csv_path, 'w', encoding='utf-8') as ef:
+                ef.write(export_content)
+                
+        except Exception:
+            logger.error("Failed to create export CSV for test %s", self.current_test.test_id)
+            pass
 
     def archive_test(self, test_id: str):
         """Moves a test folder to the archive directory."""
@@ -359,6 +414,7 @@ class TestManager:
         return False
 
     def _on_serial_data(self, sensor_id: SensorId, time: float, line: str):
+        """Write raw serial data to raw.log file with timestamp and sensor ID."""
         if self.is_running and self.raw_file:
             self.raw_file.write(f"[{time}] {sensor_id.name} {line}\n")
 
@@ -455,9 +511,7 @@ class TestManager:
 
     def get_history(self) -> List[TestMetaData]:
         """Get list of all test histories, reloaded from disk."""
-        logger.debug("[GET_HISTORY] Called - reloading from disk")
         self.reload_history()
-        logger.debug(f"[GET_HISTORY] Returning {len(self.test_history)} tests")
         return self.test_history
 
     def get_relative_time(self) -> float:
@@ -479,11 +533,7 @@ class TestManager:
         return 0.0
 
     def get_graphique_png(self, sensor_name: str) -> bytes:
-        """Return the graphique as PNG bytes.
-        
-        Args:
-            sensor_name: Either 'DISP_1' or 'ARC' to determine which graphique to return
-        """
+        """Return the graphique as PNG bytes."""
         
         if sensor_name == 'DISP_1':
             return self.graphique_disp1.get_graphique_png()
@@ -539,7 +589,7 @@ class TestManager:
         return True
     
     def list_files(self) -> List[str]:
-        """List files added to the current test (excluding raw.log and description.md)."""
+        """List files added to the current test by the API calls."""
         if self.current_test_dir is None:
             return []
         
