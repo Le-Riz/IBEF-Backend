@@ -1,7 +1,8 @@
-import asyncio
 import logging
+import queue
 import time
 import platform
+import threading
 import serial
 from core.models.sensor_enum import SensorId
 
@@ -74,14 +75,21 @@ def check_linux_serial_limits():
 
 
 class SerialHandler:
+    """
+    Dedicated blocking-thread serial reader.
+    
+    Each instance runs its own daemon thread that blocks on serial.readline().
+    Decoded lines are pushed into a thread-safe queue.Queue as
+    (SensorId, decoded_line, timestamp) tuples.
+    """
+
     def __init__(self, 
         sensor_id: SensorId,
         port: str,
-        queue: asyncio.Queue[tuple[SensorId, str, float]],
+        queue: queue.Queue,
         baudrate: int = 9600,
-        serial_timeout: float = 0.01,
+        serial_timeout: float = 0.5,
     ):
-        
         self.baudrate = baudrate
         self.port = port
         self.timeout = serial_timeout
@@ -89,55 +97,91 @@ class SerialHandler:
         self.sensor_id = sensor_id
         self.queue = queue
         self.running = False
+        self._drop_count = 0
+        self._thread: threading.Thread | None = None
         
     def start(self):
+        """Start the dedicated reader thread."""
         self.running = True
-        asyncio.create_task(self.read_serial())
+        self._thread = threading.Thread(
+            target=self._read_loop,
+            daemon=True,
+            name=f"SerialReader-{self.sensor_id.name}",
+        )
+        self._thread.start()
     
     def stop(self):
+        """Signal the thread to stop and wait for it to exit."""
         self.running = False
         if self.serial and self.serial.is_open:
             self.serial.close()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
+        if self._drop_count > 0:
+            logger.warning(f"SerialHandler {self.sensor_id.name}: total dropped frames = {self._drop_count}")
     
-    async def read_serial(self):
+    def _read_loop(self):
+        """
+        Blocking read loop (runs in its own thread).
+        
+        Connects to the serial port, reads lines, timestamps them,
+        and pushes them into the shared queue.
+        """
         while self.running:
             try:
+                # Connect / reconnect
                 if self.serial is None:
                     try:
-                        self.serial = await asyncio.to_thread(
-                            serial.Serial, port=self.port, baudrate=self.baudrate, timeout=self.timeout
+                        self.serial = serial.Serial(
+                            port=self.port,
+                            baudrate=self.baudrate,
+                            timeout=self.timeout,
                         )
-                        logger.info(f"SerialHandler for {self.sensor_id.name} reconnected to {self.port} at {self.baudrate} baud.")
+                        logger.info(
+                            f"SerialHandler for {self.sensor_id.name} connected "
+                            f"to {self.port} at {self.baudrate} baud."
+                        )
                         
-                        # Apply platform-specific optimizations
                         if platform.system() == "Linux":
                             optimize_linux_serial(self.serial)
                         
                     except Exception as e:
-                        logger.error(f"Failed to reconnect SerialHandler for {self.sensor_id.name} on {self.port}: {e}")
-                        await asyncio.sleep(0.5)
+                        logger.error(
+                            f"Failed to connect SerialHandler for "
+                            f"{self.sensor_id.name} on {self.port}: {e}"
+                        )
+                        time.sleep(0.5)
                         continue
                 
-                line = await asyncio.to_thread(self.serial.readline)
+                # Blocking read — waits up to self.timeout for a full line
+                line = self.serial.readline()
                 if line:
                     timestamp = time.time()
-                    
                     decoded_line = line.decode('utf-8', errors='ignore').strip()
                     
                     if decoded_line:
+                        # Drop oldest if queue is full
                         if self.queue.full():
                             try:
                                 self.queue.get_nowait()
-                            except asyncio.QueueEmpty:
+                                self._drop_count += 1
+                                if self._drop_count % 100 == 1:
+                                    logger.warning(
+                                        f"{self.sensor_id.name}: dropped "
+                                        f"{self._drop_count} frames (queue full)"
+                                    )
+                            except queue.Empty:
                                 pass
-                        await self.queue.put((self.sensor_id, decoded_line, timestamp))
+                        self.queue.put_nowait(
+                            (self.sensor_id, decoded_line, timestamp)
+                        )
                     
             except Exception as e:
-                logger.error(f"Error reading from serial port for {self.sensor_id}: {e}")
+                logger.error(f"Error reading serial port for {self.sensor_id.name}: {e}")
                 if self.serial:
                     try:
                         self.serial.close()
                     except Exception as close_error:
-                        logger.error(f"Error closing serial port for {self.sensor_id}: {close_error}")
+                        logger.error(f"Error closing serial port for {self.sensor_id.name}: {close_error}")
                     self.serial = None
-                await asyncio.sleep(1.0)
+                time.sleep(1.0)
