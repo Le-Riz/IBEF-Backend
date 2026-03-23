@@ -5,9 +5,6 @@ case "${1:-api}" in
   api)
     cd src && uvicorn main:app --reload --host 0.0.0.0 --port 8000
     ;;
-  test)
-    pytest
-    ;;
   doc)
     python scripts/export_openapi.py
     mkdocs serve
