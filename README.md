@@ -1,121 +1,87 @@
 # IBEF Backend API
 
-FastAPI backend for the IBEF project, managed with Hatch.
+FastAPI backend for the IBEF project.
 
-## Quick start
+## Requirements
+
+- Python 3.10+
+- Linux/macOS shell for helper scripts (`run.sh`, `scripts/*.sh`)
+
+## Quick Start
+
+### Option 1: Virtual environment + pip (recommended)
 
 ```bash
-# install hatch if missing
-pipx install hatch
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .[dev]
 
-# install dependencies and run the dev server
-hatch run api
+# Start API
+cd src && uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Alternatively, on Unix systems:
+### Option 2: Helper script
 
 ```bash
-./run.sh          # runs the API dev server (default)
-./run.sh api      # runs the API dev server
-./run.sh test     # runs the test suite
-./run.sh doc      # starts the documentation server
+./run.sh          # same as: ./run.sh api
+./run.sh api      # run API dev server
+./run.sh doc      # generate OpenAPI + serve MkDocs
+./run.sh build-docs
+./run.sh export-openapi
 ```
 
-## Development
+## Development Commands
 
 ```bash
-# start dev server
-hatch run api
-# or: ./run.sh
-# or: ./run.sh api
+# API
+cd src && uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# run tests
-hatch run test
-# or: ./run.sh test
+# Lint
+ruff check src
 
-# lint with ruff
-hatch run lint
+# Type check
+mypy src
 
-# type-check
-hatch run typecheck
-
-# serve documentation
-hatch run docs:serve
-# or: ./run.sh doc
+# Documentation
+python scripts/export_openapi.py
+mkdocs serve
+mkdocs build
 ```
 
 ## Documentation
 
-MkDocs is configured with Material and mkdocstrings.
+This project uses MkDocs + Material.
 
 ```bash
-# live docs server
-hatch run docs:serve
+# Local docs with live reload
+python scripts/export_openapi.py
+mkdocs serve
 
-# export OpenAPI schema
-hatch run export-openapi
-# or: ./run.sh export-openapi
+# Generate OpenAPI schema consumed by docs
+python scripts/export_openapi.py
 
-# build static docs (with OpenAPI schema)
-hatch run docs:export-schema
-# or: ./run.sh build-docs
+# Build static docs (OpenAPI export + mkdocs build)
+python scripts/export_openapi.py && mkdocs build
 ```
 
-The documentation includes:
-- **Interactive API Reference** — Full OpenAPI/Swagger documentation embedded in MkDocs
-- **API Overview** — Quick reference with examples
-- **Developer Guide** — Architecture and performance details
+The CI workflow in `.github/workflows/docs.yml` builds and deploys docs on pushes to `main`.
 
-## Project layout
+## Project Layout
 
-- src/: application code with `main.py`, routers, and schemas
-- docs/: MkDocs sources
-- tests/: test suite
-- pyproject.toml: project metadata, dependencies, and Hatch envs
+- `src/`: application code (FastAPI app, routers, core services, schemas)
+- `docs/`: MkDocs content
+- `config/`: runtime configuration files (including sensor config)
+- `scripts/`: helper scripts (venv setup, systemd setup, OpenAPI export)
+- `storage/`: test data and archives
+- `pyproject.toml`: dependencies and project metadata
 
-## API structure
+## Systemd Service (Linux)
 
-- `GET /health`
-  - Returns: `{"status": "ok", "app": "IBEF Backend API"}`
-  
-- `GET /api`
-  - `/sensor/{sensor_id}` — Sensor data operations (FORCE, DISP_1, DISP_2, DISP_3, ARC)
-    - **ARC** is a calculated sensor representing circular deflection: `ARC = DISP_1 - (DISP_2 + DISP_3) / 2`
-    - `GET /data` → Latest calibrated data point: `{"time": float, "value": float}`
-    - `GET /data/history?window={30,60,120,300,600}` → Fixed-count history with uniform spacing
-      - Returns exactly 300 points regardless of window duration
-      - Uses 10 Hz processing rate for point spacing
-    - `GET /raw` → Latest raw/uncalibrated data point (physical sensors only)
-    - `PUT /zero` → Calibrate sensor (zero reference)
-  - `/test` — Test session management
-    - `PUT /start` → Start test with metadata payload
-    - `PUT /stop` → Stop current test session
-  - `/history` — Test history persistence and retrieval
-    - `GET /` → List all test IDs
-    - `GET /{name}` → Get test metadata
-    - `GET /{name}/download` → Download test data as ZIP
-    - `PUT /{name}` → Update test metadata
-    - `PUT /{name}/archive` → Move test to archive
-    - `DELETE /{name}` → Permanently delete test
-  - `/graphique` — Real-time plot visualization
-    - `GET /` → Get current test graphique as PNG (X=DISP_1, Y=FORCE)
-      - Returns blank white canvas if no test running
-      - Points added automatically as data is processed (20 Hz)
+If you want the backend to run as a service:
 
-## Performance optimizations
+```bash
+./scripts/setup_systemd.sh
+```
 
-### Circular Buffer (O(1) operations)
-- **`__slots__`**: Fixed attribute list reduces memory overhead
-- **Power-of-2 capacity**: Uses bitwise AND instead of modulo for 3-5x faster indexing
-- **Precomputed windows**: All window offsets calculated at initialization (O(1) retrieval)
-- **10 Hz processing rate**: Point spacing reflects actual data delivery rate, not raw sensor frequency
-
-### Data Storage
-- **Fixed point count**: 300 points per duration window (30s, 60s, 120s, 300s, 600s) ensures consistent memory usage
-- **O(1) bulk retrieval**: Optimized `get_all()` detects buffer wrap state for fastest access
-- **No dynamic computation**: All window info precomputed; query time is deterministic
-
-### Test History
-- **Persistent storage**: Metadata in JSON, raw data in CSV with circular buffer backup
-- **Archive support**: Move old tests to archived_data folder without deleting
-- **Concurrent test support**: Each test has independent sensor buffers
+This script installs `ibef-backend.service`, replaces `<CHANGE_ME>` with the current project path, reloads systemd, enables, and restarts the service.
