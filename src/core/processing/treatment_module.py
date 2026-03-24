@@ -31,7 +31,7 @@ class TreatmentModule:
     def load_data(self, csv_file: str) -> None:
         """Load data from the specified directory"""
         logger.info(f"Loading data from {csv_file}...")
-        csv_path = os.path.join(self.directory, csv_file)
+        csv_path = open(os.path.join(self.directory, csv_file), 'r')
         reader = csv.DictReader(csv_path)
         for row in reader:
             timestamp = math.nan if row["timestamp"] == "" else float(row["timestamp"])
@@ -55,6 +55,7 @@ class TreatmentModule:
                          "FORCE": force}
         
             self.datas.append(data_line)
+        csv_path.close()
         
     def load_metadata(self, metadata: TestMetaData) -> None:
         """Load metadata from the specified dictionary"""
